@@ -1,0 +1,4 @@
+numpy
+miditoolkit
+chorder
+midi2audio
