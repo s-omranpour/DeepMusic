@@ -4,7 +4,6 @@ import numpy as np
 from deepnote.repr import MusicRepr
 from deepnote.modules import Note, Metric
 
-
 class Corrector:
     def __init__(self):
         self.major_scale = [1,0,1,0,1,1,0,1,0,1,0,1]
@@ -48,16 +47,7 @@ class Corrector:
         mask = scale[:root] + scale*11
         mask = np.array(mask[:128])
         return np.where(mask > 0)[0]
-    
-    def correct_pitches(self, notes, chord):
-        assert chord is not None
-        scale = self.make_whole_scale(chord)
-        res = []
-        for n in notes:
-            
-            note.pitch = scale[np.argmin(np.abs(note.pitch - scale))]
-            res += [note]
-        return res
+
 
     def correct_seq_pitches(self, seq):
         seq = deepcopy(seq)
