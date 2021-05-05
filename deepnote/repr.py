@@ -41,8 +41,6 @@ class MusicRepr:
                             print(bar1, bar2)
                             return False
                     return True
-                print('bars:',len(bars), len(other_bars))
-            print('len:',self.__len__(), len(other))
         return False
 
     def find_beat_index(self, beat):
