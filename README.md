@@ -3,6 +3,7 @@ DeepNote is a high level python package with following features:
  - supporting different formats like MIDI, REMI, Compound Word.
  - representing musical data in a very simple but useful way for high level music theoretic manipulations.
  - preprocessing musical data in order to feed them to neural networks (chord extraction, quantization and numericalization).
+ - correcting notes' pitches based on given chords (generated music post-processing).
 
 ## Install
 `pip install deepnote`
