@@ -61,7 +61,7 @@ class Metric:
         assert 0 <= cp[3] <= len(DEFAULT_CHORDS), "incorrect chord index"
         return Metric(position=cp[1], 
                       tempo=DEFAULT_TEMPO_BINS[cp[2] - 1] if cp[2] > 0 else None, 
-                      chord=chords[cp[3] - 1] if cp[3] > 0 else None)
+                      chord=DEFAULT_CHORDS[cp[3] - 1] if cp[3] > 0 else None)
 
     def __eq__(self, other):
         if isinstance(other, Metric):
