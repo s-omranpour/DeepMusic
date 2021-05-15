@@ -1,19 +1,15 @@
 from setuptools import setup, find_packages
 
-from deepnote import __version__, __package_name__, __description__, __repository_url__
-
 
 setup(
-    name=__package_name__,  # Required
-    version=__version__,  # Required
-    description=__description__,  # Optional
-    # long_description='',  # Optional
-    # long_description_content_type='text/markdown',  # Optional (see note above)
-    url=__repository_url__,  # Optional
-    author='Soroush Omranpour',  # Optional
-    author_email='soroush.333@gmail.com',  # Optional
-    keywords='midi, deep learning, music',  # Optional
-    packages=['deepnote'],  # Required
+    name='deepnote',
+    version='0.0.10',
+    description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
+    url='https://github.com/s-omranpour/DeepNote',
+    author='Soroush Omranpour',
+    author_email='soroush.333@gmail.com',
+    keywords='midi, deep learning, music',
+    packages=['deepnote'],
     python_requires='>=3.7, <4',
     install_requires=[
         'numpy >= 1.7.0', 
@@ -24,7 +20,7 @@ setup(
     license="MIT license",
 
     project_urls={  # Optional
-        'Bug Reports': __repository_url__ + '/issues',
-        'Source': __repository_url__,
+        'Bug Reports': 'https://github.com/s-omranpour/DeepNote/issues',
+        'Source': 'https://github.com/s-omranpour/DeepNote',
     },
 )
