@@ -96,7 +96,7 @@ class MusicRepr:
                     tracks[inst] += [e]
         res = {}
         for inst in existing_insts:
-            res[inst] = MusicRepr(utils.remove_excess_pos(tracks[inst]))
+            res[inst] = MusicRepr(utils.remove_excess_pos(tracks[inst]), tick_resol=self.tick_resol, unit=self.unit)
         return res
 
     def get_instruments(self):
