@@ -15,7 +15,12 @@ setup(
     keywords='midi, deep learning, music',  # Optional
     packages=['deepnote'],  # Required
     python_requires='>=3.7, <4',
-    install_requires=['numpy', 'miditoolkit', 'chorder', 'midi2audio'],  # Optional
+    install_requires=[
+        'numpy >= 1.7.0', 
+        'miditoolkit >= 0.1.14',
+        'chorder >= 0.1.2',
+        'midi2audio >= 0.1.1'
+    ],
     license="MIT license",
 
     project_urls={  # Optional
