@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='deepnote',
-    version='0.0.10',
+    version='0.0.11',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
     url='https://github.com/s-omranpour/DeepNote',
     author='Soroush Omranpour',

@@ -235,6 +235,17 @@ class MusicRepr:
         res = utils.flatten([utils.merge_bars(dict(zip(insts, bar)), key_inst) for bar in zip(*bars)])
         return MusicRepr(res, tick_resol=tracks[key_inst].tick_resol, unit=tracks[key_inst].unit)
 
+    @staticmethod
+    def concatenate(seq_list : list):
+        tick_resols = [seq.tick_resol for seq in seq_list]
+        assert min(tick_resols) == max(tick_resols), "sequences should have equal tick resolutions"
+        units = [seq.unit for seq in seq_list]
+        assert min(units) == max(units), "sequences should have equal units"
+        events = []
+        for seq in seq_list:
+            events += seq.events
+        return MusicRepr(events, tick_resol=tick_resols[0], unit=units[0])
+
 
     ## Output
     def to_remi(self, ret='token'):
