@@ -101,28 +101,39 @@ class MusicRepr:
     ## Input
     @staticmethod
     def from_file(
-        file_path, 
-        unit=12,
-        min_tempo=30,
-        max_tempo=300,
-        num_tempo_bins=30, 
-        num_velocity_bins=30):
+        file_path,
+        const: Constants = None, 
+        unit: int = 12,
+        min_tempo : int = 30,
+        max_tempo : int = 300,
+        num_tempo_bins : int = 30, 
+        num_velocity_bins : int = 30):
 
         midi = parser.MidiFile(file_path)
-        return MusicRepr.from_midi(midi, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
+        return MusicRepr.from_midi(midi, const, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
 
     @staticmethod
     def from_midi(
         midi, 
-        unit=12,
-        min_tempo=30,
-        max_tempo=300,
-        num_tempo_bins=30, 
-        num_velocity_bins=30):
+        const: Constants = None, 
+        unit: int = 12,
+        min_tempo : int = 30,
+        max_tempo : int = 300,
+        num_tempo_bins : int = 30, 
+        num_velocity_bins : int = 30):
 
         midi = deepcopy(midi)
         tick_resol = midi.ticks_per_beat
-        const = Constants(unit, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
+        
+        if const is None:
+            const = Constants(
+                unit, 
+                tick_resol, 
+                min_tempo, 
+                max_tempo, 
+                num_tempo_bins, 
+                num_velocity_bins
+            )
 
         events = defaultdict(list)
         for inst in midi.instruments:
@@ -172,7 +183,10 @@ class MusicRepr:
 
 
     @staticmethod
-    def from_cp(cp, const : Constants):
+    def from_cp(cp, const : Constants = None):
+        if const is None:
+            const = Constants()
+
         cp = utils.clean_cp(np.array(cp))
         bars = []
         for c in cp:
@@ -190,7 +204,10 @@ class MusicRepr:
         return MusicRepr(res, const=const)
 
     @staticmethod
-    def from_string(text, const : Constants):
+    def from_string(text, const : Constants = None):
+        if const is None:
+            const = Constants()
+
         tokens = text.split()
         n = len(tokens)
         i = 0
@@ -244,7 +261,10 @@ class MusicRepr:
         return MusicRepr(res, const=const)
 
     @staticmethod
-    def from_indices(indices, const : Constants):
+    def from_indices(indices, const : Constants = None):
+        if const is None:
+            const = Constants()
+            
         return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]))
 
     @staticmethod
