@@ -134,6 +134,8 @@ class MusicRepr:
                 num_tempo_bins, 
                 num_velocity_bins
             )
+        else:
+            const.update_resolution(tick_resol)
 
         events = defaultdict(list)
         for inst in midi.instruments:

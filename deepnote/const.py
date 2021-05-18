@@ -76,6 +76,11 @@ class Constants:
                                     ['NoteVelocity_'+str(v)for v in self.velocity_bins]
 
 
+    def update_resolution(self, tick_resol):
+        self.tick_resol = tick_resol
+        self.step = tick_resol // self.unit
+        self.bar_resol = 4*tick_resol
+
     def __repr__(self):
         return f'Constants(unit={self.unit}, tick_resol={self.tick_resol}, min_tempo={self.min_tempo}, max_tempo={self.max_tempo}, num_tempo_bins={self.num_tempo_bins}, num_velocity_bins={self.num_velocity_bins})'
 
