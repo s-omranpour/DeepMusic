@@ -1,9 +1,9 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 
 setup(
     name='deepnote',
-    version='0.0.11',
+    version='0.1.0',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
     url='https://github.com/s-omranpour/DeepNote',
     author='Soroush Omranpour',

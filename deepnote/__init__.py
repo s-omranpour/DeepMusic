@@ -1,3 +1,3 @@
-from .const import *
+from .const import Constants
 from .modules import *
 from .repr import MusicRepr

@@ -1,48 +1,90 @@
 import numpy as np
 import itertools
 
-## general
-DEFAULT_UNIT = 12
-DEFAULT_TICK_RESOL = 120
-DEFAULT_STEP = DEFAULT_TICK_RESOL // DEFAULT_UNIT
-DEFAULT_BAR_RESOL = DEFAULT_TICK_RESOL * 4
-DEFAULT_INSTRUMENTS = [
-    'piano',
-    'percussion',
-    'organ',
-    'guitar',
-    'bass',
-    'strings',
-    'ensemble',
-    'brass',
-    'reed',
-    'pipe',
-    'synth-lead',
-    'synth-pad',
-    'synth-effects',
-    'ethnic',
-    'percussive',
-    'sound-effects',
-    'drums'
-]
+class Constants:
+    def __init__(
+        self, 
+        unit=12, 
+        tick_resol=120, 
+        min_tempo=30,
+        max_tempo=300,
+        num_tempo_bins=30, 
+        num_velocity_bins=30):
 
-## note
-DEFAULT_POS_BINS = np.arange(1, 4*DEFAULT_UNIT+1)
-DEFAULT_DUR_BINS = np.arange(1, 4*DEFAULT_UNIT+1)
-DEFAULT_VEL_BINS = np.linspace(9, 127, 30, dtype=int)
+        ## time
+        self.unit = unit
+        self.n_bar_steps = 4 * unit
 
-## metric
-DEFAULT_PITCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-DEFAULT_CHORD_QUALITIES = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
-DEFAULT_CHORDS = ['_'.join(e) for e in itertools.product(DEFAULT_PITCH_CLASSES, DEFAULT_CHORD_QUALITIES)]
-DEFAULT_TEMPO_BINS = np.linspace(42, 296, 20, dtype=int)
+        ## resolution
+        self.tick_resol = tick_resol
+        self.step = tick_resol // unit
+        self.bar_resol = 4*tick_resol
 
-## remi
-DEFAULT_TOKENS = ['Bar', 'EOS'] +\
-    ['BeatPosition_'+str(p) for p in DEFAULT_POS_BINS]+ \
-        ['BeatTempo_'+str(t) for t in DEFAULT_TEMPO_BINS]+ \
-            ['BeatChord_'+str(c) for c in DEFAULT_CHORDS] + \
-                ['NoteInstFamily_'+str(inst) for inst in DEFAULT_INSTRUMENTS] + \
-                    ['NotePitch_'+str(i) for i in range(128)] + \
-                        ['NoteDuration_'+str(d) for d in DEFAULT_DUR_BINS] + \
-                            ['NoteVelocity_'+str(v)for v in DEFAULT_VEL_BINS]
+        ## position
+        self.position_bins = np.arange(1, 4*unit+1)
+
+        ## tempo
+        self.min_tempo = min_tempo
+        self.max_tempo = max_tempo
+        self.num_tempo_bins = num_tempo_bins
+        self.tempo_bins = np.linspace(min_tempo, max_tempo, num_tempo_bins, dtype=int)
+
+        ## chord
+        self.pitch_classes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        self.chord_qualities = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
+        self.chords = ['_'.join(e) for e in itertools.product(self.pitch_classes, self.chord_qualities)]
+
+        ## instrument
+        self.instruments = [
+            'piano',
+            'percussion',
+            'organ',
+            'guitar',
+            'bass',
+            'strings',
+            'ensemble',
+            'brass',
+            'reed',
+            'pipe',
+            'synth-lead',
+            'synth-pad',
+            'synth-effects',
+            'ethnic',
+            'percussive',
+            'sound-effects',
+            'drums'
+        ]
+
+        ## pitch
+        self.pitches = np.arange(0, 128)
+
+        ## duration
+        self.duration_bins = np.arange(1, 4*unit+1)
+
+        ## velocity
+        self.num_velocity_bins = num_velocity_bins
+        self.velocity_bins = np.linspace(1, 127, num_velocity_bins, dtype=int)
+
+        ## REMI tokens
+        self.all_tokens = ['Bar', 'EOS'] +\
+            ['BeatPosition_'+str(p) for p in self.position_bins]+ \
+                ['BeatTempo_'+str(t) for t in self.tempo_bins]+ \
+                    ['BeatChord_'+str(c) for c in self.chords] + \
+                        ['NoteInstFamily_'+str(inst) for inst in self.instruments] + \
+                            ['NotePitch_'+str(i) for i in self.pitches] + \
+                                ['NoteDuration_'+str(d) for d in self.duration_bins] + \
+                                    ['NoteVelocity_'+str(v)for v in self.velocity_bins]
+
+
+    def __repr__(self):
+        return f'Constants(unit={self.unit}, tick_resol={self.tick_resol}, min_tempo={self.min_tempo}, max_tempo={self.max_tempo}, num_tempo_bins={self.num_tempo_bins}, num_velocity_bins={self.num_velocity_bins})'
+
+    def __eq__(self, o: object):
+        if isinstance(o, Constants):
+            return self.unit == o.unit and\
+                self.tick_resol == o.tick_resol and \
+                    self.min_tempo == o.min_tempo and \
+                        self.max_tempo == o.max_tempo and \
+                            self.num_tempo_bins == o.num_tempo_bins and \
+                                self.num_velocity_bins == o.num_velocity_bins
+        return False

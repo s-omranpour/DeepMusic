@@ -1,4 +1,3 @@
-import os
 import numpy as np
 from copy import deepcopy
 from chorder import Dechorder
@@ -7,8 +6,8 @@ from midi2audio import FluidSynth
 from miditoolkit.midi import parser as mid_parser
 from miditoolkit.midi.containers import Marker
 
-from deepnote.modules import *
-from deepnote.const import *
+from .modules import *
+from .const import Constants
 
 def midi_to_audio(midi_path, audio_path, sf2_path='assets/soundfonts/general.sf2'):
     FluidSynth(sf2_path).midi_to_audio(midi_path, audio_path)
@@ -83,7 +82,7 @@ def merge_bars(bars : dict, key_inst : str):
               'notes':dict([(inst, []) for inst in bars])
           }
          )
-         for i in range(1, bars[key_inst].unit * 4 + 1)]
+         for i in range(1, bars[key_inst].const.unit * 4 + 1)]
     )
     for inst in bars:
         prev_pos = 1
@@ -106,13 +105,14 @@ def merge_bars(bars : dict, key_inst : str):
 
 
 def analyze_midi(midi):
+    const = Constants()
     midi = deepcopy(midi)
     chords = Dechorder.dechord(midi)
     markers = []
     prev = None
     for cidx, chord in enumerate(chords):
         if chord.is_complete():
-            chord_text = 'Chord_' + DEFAULT_PITCH_CLASSES[chord.root_pc] + '_' + chord.quality
+            chord_text = 'Chord_' + const.pitch_classes[chord.root_pc] + '_' + chord.quality
             if chord_text != prev:
                 markers.append(Marker(time=int(cidx*midi.ticks_per_beat), text=chord_text))
                 prev = chord_text
@@ -123,7 +123,14 @@ def edit_time(time, offset, step):
     time = max(0, time - offset)
     return int(np.round(time/step)*step)
 
-def quantize_midi(midi, unit=DEFAULT_UNIT):
+def quantize_midi(
+    midi, 
+    unit=12,
+    min_tempo=30,
+    max_tempo=300,
+    num_tempo_bins=30, 
+    num_velocity_bins=30):
+
     midi = deepcopy(midi)
     ## load notes
     instr_notes = []
@@ -135,22 +142,23 @@ def quantize_midi(midi, unit=DEFAULT_UNIT):
     
     offset = min([notes[0].start for notes in instr_notes])
     tick_resol = midi.ticks_per_beat
-    bar_resol = tick_resol * 4
-    step = tick_resol // unit
+    const = Constants(unit, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
 
     for i,notes in enumerate(instr_notes):
         for note in notes:
-            note.start = edit_time(note.start, offset, step)
-            note.end = edit_time(note.end, offset, step)
-            note.end = min(note.end, edit_time(note.start + bar_resol, offset, step))
-            note.velocity = DEFAULT_VEL_BINS[np.argmin(abs(DEFAULT_VEL_BINS - note.velocity))]
+            note.start = edit_time(note.start, offset, const.step)
+            note.end = edit_time(note.end, offset, const.step)
+            note.end = min(note.end, edit_time(note.start + const.bar_resol, offset, const.step))
+            note.velocity = const.velocity_bins[
+                np.argmin(abs(const.velocity_bins - note.velocity))
+            ]
         midi.instruments[i].notes = sorted(notes, key=lambda x: (x.start, x.pitch))
 
     # load chords
     chords = []
     for marker in midi.markers:
         if marker.text.startswith('Chord'):
-            marker.time = edit_time(marker.time, offset, step)
+            marker.time = edit_time(marker.time, offset, const.step)
             chords.append(marker)
     chords.sort(key=lambda x: x.time)
     midi.markers = chords
@@ -159,15 +167,25 @@ def quantize_midi(midi, unit=DEFAULT_UNIT):
     # load tempos
     tempos = midi.tempo_changes
     for tempo in tempos:
-        tempo.time = edit_time(tempo.time, offset, step)
-        tempo.tempo = DEFAULT_TEMPO_BINS[np.argmin(abs(DEFAULT_TEMPO_BINS-tempo.tempo))]
+        tempo.time = edit_time(tempo.time, offset, const.step)
+        tempo.tempo = const.tempo_bins[
+            np.argmin(abs(const.tempo_bins - tempo.tempo))
+        ]
     tempos.sort(key=lambda x: x.time)
     midi.tempo_changes = tempos
 
-    midi.max_tick = edit_time(midi.max_tick, offset, step)
+    midi.max_tick = edit_time(midi.max_tick, offset, const.step)
     return midi
 
-def process_midi(file_path, save_path, unit=DEFAULT_UNIT):
+def process_midi(
+    file_path, 
+    save_path, 
+    unit=12,
+    min_tempo=30,
+    max_tempo=300,
+    num_tempo_bins=30, 
+    num_velocity_bins=30):
+
     try:
         midi = mid_parser.MidiFile(file_path)
         times = midi.time_signature_changes
@@ -175,8 +193,8 @@ def process_midi(file_path, save_path, unit=DEFAULT_UNIT):
             t = times[0]
             if t.numerator != 4 or t.denominator != 4:
                 return
-        midi = analyze(midi)
-        midi = quantize(midi, unit)
+        midi = analyze_midi(midi)
+        midi = quantize_midi(midi, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
         midi.dump(save_path + file_path.split('/')[-1])
     except Exception as e:
         print(file_path, 'caused error', e)

@@ -1,6 +1,7 @@
 from typing import List
+import numpy as np
 
-from deepnote.const import *
+from .const import Constants
 
 
 class Metric:
@@ -13,10 +14,16 @@ class Metric:
         chord : 1~132 (0 means no change, 1 to 132 show index of chord in chords)
     """
 
-    def __init__(self, position : int = 0, tempo : int = None, chord : str = None):
+    def __init__(
+        self, 
+        position : int = 0, 
+        tempo : int = None,
+        chord : str = None):
+        
         self.position = position
-        self.chord = chord
         self.tempo = tempo
+        self.chord = chord
+        
 
     def __repr__(self):
         if self.position == 0:
@@ -37,15 +44,15 @@ class Metric:
         if self.tempo:
             res += [Event('BeatTempo', self.tempo)]
         if self.chord:
-            res += [Event('BeatChord', DEFAULT_CHORDS.index(self.chord))]
+            res += [Event('BeatChord', self.chord)]
         return res
 
-    def to_cp(self):
+    def to_cp(self, const : Constants):
         return [
             0, 
             self.position, 
-            np.where(DEFAULT_TEMPO_BINS == self.tempo)[0][0] + 1 if self.tempo else 0,
-            DEFAULT_CHORDS.index(self.chord) + 1 if self.chord else 0,
+            np.where(const.tempo_bins == self.tempo)[0][0] + 1 if self.tempo else 0,
+            const.chords.index(self.chord) + 1 if self.chord else 0,
             0,
             0, 
             0, 
@@ -53,15 +60,18 @@ class Metric:
         ]
 
     @staticmethod
-    def from_cp(cp, unit=DEFAULT_UNIT):
+    def from_cp(cp, const : Constants):
         assert len(cp) == 8, "incorrect size"
-        assert cp[0] == 0, "incorrect type"
-        assert 0 <= cp[1] <= unit*4, "incorrect position"
-        assert 0 <= cp[2] <= len(DEFAULT_TEMPO_BINS), "incorrect tempo index"
-        assert 0 <= cp[3] <= len(DEFAULT_CHORDS), "incorrect chord index"
-        return Metric(position=cp[1], 
-                      tempo=DEFAULT_TEMPO_BINS[cp[2] - 1] if cp[2] > 0 else None, 
-                      chord=DEFAULT_CHORDS[cp[3] - 1] if cp[3] > 0 else None)
+        assert cp[0] == 0,   "incorrect type"
+        assert 0 <= cp[1] <= const.unit*4,          "incorrect position"
+        assert 0 <= cp[2] <= len(const.tempo_bins), "incorrect tempo index"
+        assert 0 <= cp[3] <= len(const.chords),     "incorrect chord index"
+        
+        return Metric(
+            position=cp[1], 
+            tempo=const.tempo_bins[cp[2] - 1] if cp[2] > 0 else None, 
+            chord=const.chords[cp[3] - 1] if cp[3] > 0 else None
+        )
 
     def __eq__(self, other):
         if isinstance(other, Metric):
@@ -103,31 +113,31 @@ class Note:
             Event('NoteVelocity', self.velocity)
         ]
 
-    def to_cp(self):
+    def to_cp(self, const : Constants):
         return [
             1, 
             0, 
             0,
             0, 
-            DEFAULT_INSTRUMENTS.index(self.inst_family),
+            const.instruments.index(self.inst_family),
             self.pitch, 
             self.duration - 1,  
-            np.where(DEFAULT_VEL_BINS == self.velocity)[0][0]
+            np.where(const.velocity_bins == self.velocity)[0][0]
         ]
 
     @staticmethod
-    def from_cp(cp, unit=DEFAULT_UNIT):
+    def from_cp(cp, const : Constants):
         assert len(cp) == 8, "incorrect size"
-        assert cp[0] == 1, "incorrect type"
-        assert 0 <= cp[4] < len(DEFAULT_INSTRUMENTS), "incorrect instrument family"
+        assert cp[0] == 1,   "incorrect type"
+        assert 0 <= cp[4] < len(const.instruments), "incorrect instrument family"
         assert 0 <= cp[5] < 128, "incorrect pitch"
-        assert 0 <= cp[6] < unit*4, "incorrect duration"
-        assert 0 <= cp[7] < len(DEFAULT_VEL_BINS), "incorrect velocity"
+        assert 0 <= cp[6] < const.unit*4, "incorrect duration"
+        assert 0 <= cp[7] < len(const.velocity_bins), "incorrect velocity"
         return Note(
-            inst_family=DEFAULT_INSTRUMENTS[cp[4]],
+            inst_family=const.instruments[cp[4]],
             pitch=cp[5], 
             duration=cp[6] + 1, 
-            velocity=DEFAULT_VEL_BINS[cp[7]]
+            velocity=const.velocity_bins[cp[7]]
         )
 
     def __eq__(self, other):
