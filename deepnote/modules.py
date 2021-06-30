@@ -9,8 +9,8 @@ class Metric:
     *** compund word representation ***
 
         type :  0 = metric
-        position: 0~48  (0 means a bar, actual positions start from 1 to 48) 
-        tempo : 0~20  (0 means no change, 1 to 20 show index of tempo in tempo bins)
+        position: 0~len(positions)-1  (0 means stating of a bar) 
+        tempo : 0~len(tempo_bins)  (0 means no change, 1 to 20 show index of tempo in tempo bins)
         chord : 1~132 (0 means no change, 1 to 132 show index of chord in chords)
     """
 
@@ -26,21 +26,16 @@ class Metric:
         
 
     def __repr__(self):
-        if self.position == 0:
-            return 'Bar()'
-
-        res = ['position='+str(self.position)]
+        cls = 'Bar' if self.position == 0 else 'Beat'
+        prop = ['position='+str(self.position)]
         if self.tempo:
-            res += ["tempo=" + str(self.tempo)]
+            prop += ["tempo=" + str(self.tempo)]
         if self.chord:
-            res += ['chord='+self.chord]
-        return "Beat({})".format(', '.join(res))
+            prop += ['chord='+self.chord]
+        return f"{cls}({', '.join(prop)})"
 
     def to_remi(self):
-        if self.position == 0:
-            return [Event('Bar')]
-
-        res = [Event('BeatPosition', self.position)]
+        res = [Event('BeatPosition', self.position) if self.position > 0 else Event('Bar')]
         if self.tempo:
             res += [Event('BeatTempo', self.tempo)]
         if self.chord:
@@ -63,7 +58,7 @@ class Metric:
     def from_cp(cp, const : Constants):
         assert len(cp) == 8, "incorrect size"
         assert cp[0] == 0,   "incorrect type"
-        assert 0 <= cp[1] <= const.unit*4,          "incorrect position"
+        assert 0 <= cp[1] < const.unit*4,           "incorrect position"
         assert 0 <= cp[2] <= len(const.tempo_bins), "incorrect tempo index"
         assert 0 <= cp[3] <= len(const.chords),     "incorrect chord index"
         
@@ -90,8 +85,8 @@ class Note:
         type :  1 = note
         inst_family: 0~16  (general midi instrument types, 16 = drums) 
         pitch : 0~127  (standard midi pitch)
-        duration : 0~47  (duration in time units minus 1)
-        velocity : 0~29  (index of velocity in velocity bins)
+        duration : 0~len(positions)-1  (duration in time units minus 1)
+        velocity : 0~len(vel_bins)-1  (index of velocity in velocity bins)
     """
 
     def __init__(self, inst_family : str = 'piano', pitch : int = 0, duration : int = 1, velocity : int = 0):

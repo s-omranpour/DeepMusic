@@ -16,15 +16,15 @@ def sort_bar_beats(bar):
     assert isinstance(bar[0], Metric) and bar[0].position == 0, "First event in a bar should be a Bar()"
     poses = {}
     prev_pos = None
-    for e in bar[1:]:
-        if isinstance(e, Metric) and e.position > 0:
+    for e in bar:
+        if isinstance(e, Metric):
             prev_pos = e
             poses[prev_pos] = []
         elif isinstance(e, Note):
             poses[prev_pos] += [e]
 
-    res = [bar[0]]
-    for pos in sorted(poses.keys(), key=lambda x: x.position):
+    res = []
+    for pos in sorted(poses, key=lambda x: x.position):
         res += [pos] + poses[pos]
     return res
 
@@ -57,9 +57,9 @@ def clean_cp(cp):
 def compare_bars(bar1, bar2):
     last_pos1 = set()
     last_pos2 = set()
-    for e1, e2 in zip(bar1.events[1:], bar2.events[1:]):
+    for e1, e2 in zip(bar1.events, bar2.events):
         if isinstance(e1, Metric) and isinstance(e2, Metric):
-            if last_pos1 != last_pos2:
+            if e1 != e2 or last_pos1 != last_pos2:
                 return False
             last_pos1 = set()
             last_pos2 = set()
@@ -72,7 +72,6 @@ def compare_bars(bar1, bar2):
 
 
 def merge_bars(bars : dict, key_inst : str):
-    res = [Metric()]
     poses = dict(
         [(i, 
           {
@@ -82,12 +81,12 @@ def merge_bars(bars : dict, key_inst : str):
               'notes':dict([(inst, []) for inst in bars])
           }
          )
-         for i in range(1, bars[key_inst].const.unit * 4 + 1)]
+         for i in range(bars[key_inst].const.unit * 4)]
     )
     for inst in bars:
-        prev_pos = 1
-        for e in bars[inst].events[1:]:
-            if isinstance(e, Metric) and e.position > 0:
+        prev_pos = 0
+        for e in bars[inst].events:
+            if isinstance(e, Metric):
                 prev_pos = e.position
                 poses[prev_pos]['empty'] = False
                 if inst == key_inst:
@@ -96,6 +95,7 @@ def merge_bars(bars : dict, key_inst : str):
             elif isinstance(e, Note):
                 poses[prev_pos]['notes'][inst] += [e]
 
+    res = []
     for pos in poses:
         if not poses[pos]['empty']:
             res += [Metric(position=pos, tempo=poses[pos]['tempo'], chord=poses[pos]['chord'])]

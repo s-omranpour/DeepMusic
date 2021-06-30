@@ -32,23 +32,22 @@ class MusicRepr:
                 if len(bars) == len(other_bars):
                     for bar1, bar2 in zip(bars, other_bars):
                         if not utils.compare_bars(bar1, bar2):
-                            print(bar1, bar2)
                             return False
                     return True
         return False
 
     def find_beat_index(self, beat):
         query = beat * self.const.unit
-        prev_bar = -self.const.n_bar_steps
-        t = 0
+        n_bars = 0
+        prev_idx = 0
         for i, e in enumerate(self.events):
-            if isinstance(e, Metric) and e.position == 0:
-                prev_bar += self.const.n_bar_steps
-                t = prev_bar
-            if isinstance(e, Metric) and e.position > 0:
-                t = prev_bar + e.position
-            if query < t:
-                return i - 1
+            if isinstance(e, Metric):
+                prev_pos = e.position
+                if e.position == 0:
+                    n_bars += 1
+                if query < (n_bars-1)*self.const.n_bar_steps + prev_pos:
+                    return prev_idx
+                prev_idx = i
         return -1
 
     def slice_by_index(self, start, end):
@@ -163,16 +162,14 @@ class MusicRepr:
                 marker.text = marker.text[6:]
                 events[marker.time // const.step] += [marker]
 
+        for pos in range(0, sorted(events)[-1] + 1, const.n_bar_steps):
+            if pos not in events:
+                events[pos] = []
+
         res = []
-        pos_indices = sorted(list(events.keys()))
-        bar_idx = -1
-        for pos_idx in pos_indices:
-            while pos_idx // const.n_bar_steps > bar_idx:
-                res += [Metric()]  ## bar
-                bar_idx += 1
-            
+        for pos_idx in sorted(events):
             notes = []
-            beat = Metric(position=(pos_idx % const.n_bar_steps) + 1)
+            beat = Metric(position=pos_idx % const.n_bar_steps)
             for e in events[pos_idx]:
                 if isinstance(e, Note):
                     notes += [e]
@@ -194,7 +191,7 @@ class MusicRepr:
         for c in cp:
             if c[0] == 0: ## metric
                 if c[1] == 0:
-                    bars += [[Metric()]]
+                    bars += [[Metric.from_cp(c, const=const)]]
                 else:
                     bars[-1] += [Metric.from_cp(c, const=const)]
             
@@ -211,52 +208,49 @@ class MusicRepr:
             const = Constants()
 
         tokens = text.split()
-        n = len(tokens)
-        i = 0
         bars = []
-        while i < n:
-            if tokens[i] == 'Bar':
+        for i, token in enumerate(tokens):
+            if token == 'Bar':
                 bars += [[Metric()]]
 
-            elif tokens[i].startswith('BeatPosition'):
+            elif token.startswith('BeatPosition'):
                 bars[-1] += [Metric(position=int(tokens[i].split('_')[1]))]
 
-            elif tokens[i].startswith('BeatTempo'):
-                assert isinstance(bars[-1][-1], Metric) and bars[-1][-1].position > 0
+            elif token.startswith('BeatTempo'):
+                assert isinstance(bars[-1][-1], Metric)
                 tempo = int(tokens[i].split('_')[1])
                 assert tempo in const.tempo_bins
                 bars[-1][-1].tempo = tempo
 
-            elif tokens[i].startswith('BeatChord'):
-                assert isinstance(bars[-1][-1], Metric) and bars[-1][-1].position > 0
-                chord = tokens[i][9:]
+            elif token.startswith('BeatChord'):
+                assert isinstance(bars[-1][-1], Metric)
+                chord = tokens[i][10:]
                 assert chord in const.chords
                 bars[-1][-1].chord = chord
 
-            elif tokens[i].startswith('NoteInstFamily'):
-                assert tokens[i+1].startswith('NotePitch') and \
-                    tokens[i+2].startswith('NoteDuration') and \
-                        tokens[i+3].startswith('NoteVelocity')
-                
-                inst_family = tokens[i].split('_')[1]
+            elif token.startswith('NoteInstFamily'):
+                inst_family = token.split('_')[1]
                 assert inst_family in const.instruments
-                pitch = int(tokens[i+1].split('_')[1])
-                assert 0 <= pitch < 128
-                duration = int(tokens[i+2].split('_')[1])
-                assert duration in const.duration_bins
-                velocity = int(tokens[i+3].split('_')[1])
-                assert velocity in const.velocity_bins
+                bars[-1] += [Note(inst_family=inst_family)]
 
-                bars[-1] += [
-                    Note(
-                        inst_family=inst_family,
-                        pitch=pitch,
-                        duration=duration,
-                        velocity=velocity
-                    )
-                ]
-                i += 3
-            i += 1
+            elif token.startswith('NotePitch'):
+                assert isinstance(bars[-1][-1], Note)
+                pitch = int(token.split('_')[1])
+                assert 0 <= pitch < 128
+                bars[-1][-1].pitch = pitch
+
+            elif token.startswith('NoteDuration'):
+                assert isinstance(bars[-1][-1], Note)
+                duration = int(token.split('_')[1])
+                assert duration in const.duration_bins
+                bars[-1][-1].duration = duration
+            
+            elif token.startswith('NoteVelocity'):
+                assert isinstance(bars[-1][-1], Note)
+                velocity = int(token.split('_')[1])
+                assert velocity in const.velocity_bins
+                bars[-1][-1].velocity = velocity
+
         res = []
         for bar in bars:
             res += utils.sort_bar_beats(bar)
@@ -326,13 +320,14 @@ class MusicRepr:
         prev_pos = 0
         for e in self.events:
             if isinstance(e, Metric):
+                prev_pos = e.position
                 if e.position == 0:
                     n_bars += 1
                 if e.tempo:
-                    tempos += [ct.TempoChange(e.tempo, e.position*self.const.step + (n_bars-1)*self.const.bar_resol)]
+                    tempos += [ct.TempoChange(e.tempo, prev_pos*self.const.step + (n_bars-1)*self.const.bar_resol)]
                 if e.chord:
-                    chords += [ct.Marker('Chord_'+e.chord, e.position*self.const.step + (n_bars-1)*self.const.bar_resol)]
-                prev_pos = e.position
+                    chords += [ct.Marker('Chord_'+e.chord, prev_pos*self.const.step + (n_bars-1)*self.const.bar_resol)]
+                
             
             if isinstance(e, Note):
                 s = self.const.step * prev_pos + (n_bars-1)*self.const.bar_resol
@@ -345,8 +340,11 @@ class MusicRepr:
                 
         tempos.sort(key=lambda x: x.time)
         chords.sort(key=lambda x: x.time)
+        max_tick = max(
+            chords[-1].time if len(chords) > 0 else 0, 
+            tempos[-1].time if len(tempos) > 0 else 0
+        )
         
-        max_tick = 0
         instruments = []
         for k, v in instr_notes.items():
             k = self.const.instruments.index(k)

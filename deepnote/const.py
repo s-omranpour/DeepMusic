@@ -21,7 +21,7 @@ class Constants:
         self.bar_resol = 4*tick_resol
 
         ## position
-        self.position_bins = np.arange(1, 4*unit+1)
+        self.position_bins = np.arange(0, 4*unit)
 
         ## tempo
         self.min_tempo = min_tempo
