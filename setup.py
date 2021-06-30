@@ -1,11 +1,12 @@
 from setuptools import setup
 
+url = 'https://github.com/s-omranpour/DeepNote'
 
 setup(
     name='deepnote',
-    version='0.1.0',
+    version='0.1.2',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
-    url='https://github.com/s-omranpour/DeepNote',
+    url=url,
     author='Soroush Omranpour',
     author_email='soroush.333@gmail.com',
     keywords='midi, deep learning, music',
@@ -20,7 +21,7 @@ setup(
     license="MIT license",
 
     project_urls={  # Optional
-        'Bug Reports': 'https://github.com/s-omranpour/DeepNote/issues',
-        'Source': 'https://github.com/s-omranpour/DeepNote',
+        'Bug Reports': f'{url}/issues',
+        'Source': url,
     },
 )
