@@ -296,7 +296,7 @@ class MusicRepr:
         for e in self.events:
             res += e.to_remi()
         if add_eos:
-            res += ['EOS']
+            res += [Event('EOS')]
         if ret != 'event':
             res = [r.to_token() for r in res]
         if ret == 'index':
