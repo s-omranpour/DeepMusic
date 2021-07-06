@@ -194,7 +194,6 @@ class MusicRepr:
                     bars += [[Metric.from_cp(c, const=const)]]
                 else:
                     bars[-1] += [Metric.from_cp(c, const=const)]
-            
             elif c[0] == 1:  ## note
                 bars[-1] += [Note.from_cp(c, const=const)]
         res = []
@@ -291,21 +290,25 @@ class MusicRepr:
 
 
     ## Output
-    def to_remi(self, ret='token'):
+    def to_remi(self, ret='token', add_eos=False):
         assert ret in ['token', 'index', 'event']
         res = []
         for e in self.events:
             res += e.to_remi()
+        if add_eos:
+            res += ['EOS']
         if ret != 'event':
             res = [r.to_token() for r in res]
         if ret == 'index':
             res = [self.const.all_tokens.index(tok) for tok in res]
         return res
 
-    def to_cp(self):
+    def to_cp(self, add_eos=False):
         res = []
         for e in self.events:
             res += [e.to_cp(const=self.const)]
+        if add_eos:
+            res += [[2] + [0]*7]
         return np.array(res)
 
     def to_midi(self, output_path=None):
