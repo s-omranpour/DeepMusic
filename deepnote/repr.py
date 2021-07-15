@@ -1,9 +1,13 @@
+from operator import pos
 import os
 from miditoolkit.midi import parser
 from miditoolkit.midi import containers as ct
 from collections import defaultdict
 import numpy as np
 from copy import deepcopy
+
+from numpy.core.defchararray import ljust
+from numpy.lib.arraysetops import isin
 
 from deepnote.const import Constants
 from deepnote.modules import *
@@ -263,6 +267,45 @@ class MusicRepr:
         return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]))
 
     @staticmethod
+    def from_single_pianoroll(pianoroll : np.array, inst : str, const : Constants = None):
+        def from_pianoroll_bar(bar : np.array):
+            binarized = bar > 0
+            padded = np.pad(binarized, ((0, 0), (1, 1)))
+            diff = np.diff(padded.astype(np.int8), axis=1)
+
+            positives = np.nonzero((diff > 0))
+            pitches = positives[0]
+            note_ons = positives[1]
+            note_offs = np.nonzero((diff < 0))[1]
+
+            poses = {}
+            for idx, pitch in enumerate(pitches):
+                on = note_ons[idx] 
+                off = note_offs[idx]
+                velocity = bar[on, pitch]
+
+                if on not in poses:
+                    poses[on] = []
+                poses[on] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
+
+            events = [Metric()]
+            for pos in sorted(poses):
+                if pos > 0:
+                    events += [Metric(position=pos)]
+                for note in poses[pos]:
+                    events += [note]
+            return events
+
+
+        if const is None:
+            const = Constants()
+        events = []
+        for i in range(0, pianoroll.shape[1], const.n_bar_steps):
+            events += from_pianoroll_bar(pianoroll[:, i:const.n_bar_steps])
+        return MusicRepr(events, const)
+
+
+    @staticmethod
     def merge_tracks(tracks : dict, key_inst: str = None):
         insts = list(tracks.keys())
         bars = [track.get_bars() for track in tracks.values()]
@@ -311,6 +354,26 @@ class MusicRepr:
             res += [[2] + [0]*7]
         return np.array(res)
 
+    def to_pianoroll(self, separate_tracks=True, binarize=False):
+        def to_single_pianoroll(track : MusicRepr):
+            roll = np.zeros(shape=(128, track.get_bar_count()*track.const.n_bar_steps))
+            prev_pos = 0
+            prev_bar = -1
+            for e in track.events:
+                if isinstance(e, Metric):
+                    if e.position == 0:
+                        prev_bar += 1
+                    prev_pos = e.position
+                else:
+                    offset = prev_bar*track.const.n_bar_steps + prev_pos
+                    roll[e.pitch, offset:offset+e.duration] = 1 if binarize else e.velocity
+            return roll
+
+        if separate_tracks:
+            tracks = self.separate_tracks()
+            return dict([(inst, to_single_pianoroll(tracks[inst])) for inst in tracks])
+        return to_single_pianoroll(self)
+        
     def to_midi(self, output_path=None):
         midi = parser.MidiFile()
 
