@@ -4,7 +4,7 @@ url = 'https://github.com/s-omranpour/DeepNote'
 
 setup(
     name='deepnote',
-    version='0.1.2',
+    version='0.2.1',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
     url=url,
     author='Soroush Omranpour',

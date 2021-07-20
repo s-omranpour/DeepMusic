@@ -285,15 +285,28 @@ class MusicRepr:
                 velocity = bar[on, pitch]
 
                 if on not in poses:
-                    poses[on] = []
-                poses[on] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
+                    poses[on] = {'notes' : [], 'tempo' : None, 'chord' : None}
+                poses[on]['notes'] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
+            
+            if bar.shape[0] == 130:
+                for idx in np.where(bar[128] > 0):
+                    if idx not in poses:
+                        poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
+                    poses[idx]['tempo'] = const.tempo_bins[bar[128, idx] - 1]
+
+                for idx in np.where(bar[129] > 0):
+                    if idx not in poses:
+                        poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
+                    poses[idx]['chord'] = const.chords[bar[129, idx] - 1]
+            
 
             events = [Metric()]
-            for pos in sorted(poses):
-                if pos > 0:
-                    events += [Metric(position=pos)]
-                for note in poses[pos]:
-                    events += [note]
+            for idx in sorted(poses):
+                if idx > 0:
+                    events += [Metric(position=idx)]
+                events[-1].tempo = poses[idx]['tempo']
+                events[-1].chord = poses[idx]['chord']
+                events += poses[idx]['notes']
             return events
 
 
@@ -354,9 +367,9 @@ class MusicRepr:
             res += [[2] + [0]*7]
         return np.array(res)
 
-    def to_pianoroll(self, separate_tracks=True, binarize=False):
+    def to_pianoroll(self, separate_tracks=True, binarize=False, add_tempo_chord=False):
         def to_single_pianoroll(track : MusicRepr):
-            roll = np.zeros(shape=(128, track.get_bar_count()*track.const.n_bar_steps))
+            roll = np.zeros(shape=(130, track.get_bar_count()*track.const.n_bar_steps))
             prev_pos = 0
             prev_bar = -1
             for e in track.events:
@@ -364,10 +377,14 @@ class MusicRepr:
                     if e.position == 0:
                         prev_bar += 1
                     prev_pos = e.position
+                    offset = prev_bar*track.const.n_bar_steps + prev_pos
+                    roll[128:, offset] = e.to_cp(track.const)[2:4]
                 else:
                     offset = prev_bar*track.const.n_bar_steps + prev_pos
                     roll[e.pitch, offset:offset+e.duration] = 1 if binarize else e.velocity
-            return roll
+            if add_tempo_chord:
+                return roll
+            return roll[:128]
 
         if separate_tracks:
             tracks = self.separate_tracks()
