@@ -203,7 +203,7 @@ class MusicRepr:
         res = []
         for bar in bars:
             res += utils.sort_bar_beats(bar)
-        return MusicRepr(res, const=const)
+        return MusicRepr(utils.remove_excess_pos(res), const=const)
 
     @staticmethod
     def from_string(text, const : Constants = None):
@@ -257,7 +257,7 @@ class MusicRepr:
         res = []
         for bar in bars:
             res += utils.sort_bar_beats(bar)
-        return MusicRepr(res, const=const)
+        return MusicRepr(utils.remove_excess_pos(res), const=const)
 
     @staticmethod
     def from_indices(indices, const : Constants = None):
