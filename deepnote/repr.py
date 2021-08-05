@@ -212,24 +212,31 @@ class MusicRepr:
 
         tokens = text.split()
         bars = []
-        for i, token in enumerate(tokens):
+        for token in tokens:
             if token == 'Bar':
                 bars += [[Metric()]]
 
             elif token.startswith('BeatPosition'):
-                bars[-1] += [Metric(position=int(tokens[i].split('_')[1]))]
+                bars[-1] += [Metric(position=int(token.split('_')[1]))]
 
             elif token.startswith('BeatTempo'):
-                assert isinstance(bars[-1][-1], Metric)
-                tempo = int(tokens[i].split('_')[1])
-                assert tempo in const.tempo_bins
-                bars[-1][-1].tempo = tempo
+                ## traverse backwords to find the recent metric
+                for e in bars[-1][::-1]:
+                    if isinstance(e, Metric):
+                        tempo = int(token.split('_')[1])
+                        assert tempo in const.tempo_bins
+                        e.tempo = tempo
+                        # bars[-1][-(i+1)].tempo = tempo
+                        break
 
             elif token.startswith('BeatChord'):
-                assert isinstance(bars[-1][-1], Metric)
-                chord = tokens[i][10:]
-                assert chord in const.chords
-                bars[-1][-1].chord = chord
+                ## traverse backwords to find the recent metric
+                for e in bars[-1][::-1]:
+                    if isinstance(e, Metric):
+                        chord = token[10:]
+                        assert chord in const.chords
+                        e.chord = chord
+                        break
 
             elif token.startswith('NoteInstFamily'):
                 inst_family = token.split('_')[1]
@@ -237,22 +244,31 @@ class MusicRepr:
                 bars[-1] += [Note(inst_family=inst_family)]
 
             elif token.startswith('NotePitch'):
-                assert isinstance(bars[-1][-1], Note)
-                pitch = int(token.split('_')[1])
-                assert 0 <= pitch < 128
-                bars[-1][-1].pitch = pitch
+                ## traverse backwords to find the recent note
+                for e in bars[-1][::-1]:
+                    if isinstance(e, Note):
+                        pitch = int(token.split('_')[1])
+                        assert 0 <= pitch < 128
+                        e.pitch = pitch
+                        break
 
             elif token.startswith('NoteDuration'):
-                assert isinstance(bars[-1][-1], Note)
-                duration = int(token.split('_')[1])
-                assert duration in const.duration_bins
-                bars[-1][-1].duration = duration
-            
+                ## traverse backwords to find the recent note
+                for e in bars[-1][::-1]:
+                    if isinstance(e, Note):
+                        duration = int(token.split('_')[1])
+                        assert duration in const.duration_bins
+                        e.duration = duration
+                        break
+
             elif token.startswith('NoteVelocity'):
-                assert isinstance(bars[-1][-1], Note)
-                velocity = int(token.split('_')[1])
-                assert velocity in const.velocity_bins
-                bars[-1][-1].velocity = velocity
+                ## traverse backwords to find the recent note
+                for e in bars[-1][::-1]:
+                    if isinstance(e, Note):
+                        velocity = int(token.split('_')[1])
+                        assert velocity in const.velocity_bins
+                        e.velocity = velocity
+                        break
 
         res = []
         for bar in bars:
