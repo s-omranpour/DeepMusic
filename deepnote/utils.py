@@ -36,7 +36,7 @@ def remove_excess_pos(seq):
                 continue
         else:
             res += [e]
-    if not (isinstance(seq[-1], Metric) and seq[-1].position > 0 and e.tempo is None and e.chord is None):
+    if not (isinstance(seq[-1], Metric) and seq[-1].position > 0 and seq[-1].tempo is None and seq[-1].chord is None):
         res += [seq[-1]]
     return res
 
