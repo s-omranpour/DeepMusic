@@ -29,16 +29,14 @@ def sort_bar_beats(bar):
     return res
 
 def remove_excess_pos(seq):
-    is_empty_beat = lambda e: e.tempo is None and e.chord is None
-    is_duplicate = lambda e1, e2 : e1.position == e2.position
-    condition = lambda e1, e2 : isinstance(e1, Metric) and isinstance(e2, Metric) and e1.position > 0
     res = []
     for i,e in enumerate(seq[:-1]):
-        if condition and (is_empty_beat(e) or is_duplicate(e, seq[i+1])):
-            continue
+        if isinstance(e, Metric) and isinstance(seq[i+1], Metric) and e.position > 0:
+            if e.position == seq[i+1].position or (e.tempo is None and e.chord is None):
+                continue
         else:
             res += [e]
-    if not (isinstance(seq[-1], Metric) and seq[-1].position > 0 and is_empty_beat(seq[-1])):
+    if not (isinstance(seq[-1], Metric) and seq[-1].position > 0 and e.tempo is None and e.chord is None):
         res += [seq[-1]]
     return res
 
