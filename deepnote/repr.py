@@ -280,7 +280,7 @@ class MusicRepr:
         if const is None:
             const = Constants()
             
-        return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]))
+        return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]), const=const)
 
     @staticmethod
     def from_single_pianoroll(pianoroll : np.array, inst : str, const : Constants = None):
