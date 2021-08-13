@@ -224,7 +224,7 @@ class MusicRepr:
                 for e in bars[-1][::-1]:
                     if isinstance(e, Metric):
                         tempo = int(token.split('_')[1])
-                        assert tempo in const.tempo_bins
+                        assert tempo in const.tempo_bins, f"tempo={tempo} is not in the defined tempo bins"
                         e.tempo = tempo
                         # bars[-1][-(i+1)].tempo = tempo
                         break
@@ -234,7 +234,7 @@ class MusicRepr:
                 for e in bars[-1][::-1]:
                     if isinstance(e, Metric):
                         chord = token[10:]
-                        assert chord in const.chords
+                        assert chord in const.chords, f"chord={chord} is not in the defined chords"
                         e.chord = chord
                         break
 
@@ -248,7 +248,7 @@ class MusicRepr:
                 for e in bars[-1][::-1]:
                     if isinstance(e, Note):
                         pitch = int(token.split('_')[1])
-                        assert 0 <= pitch < 128
+                        assert 0 <= pitch < 128, "wrong pitch number"
                         e.pitch = pitch
                         break
 
@@ -257,7 +257,7 @@ class MusicRepr:
                 for e in bars[-1][::-1]:
                     if isinstance(e, Note):
                         duration = int(token.split('_')[1])
-                        assert duration in const.duration_bins
+                        assert duration in const.duration_bins, f"duration={duration} is not in the defined duration bins"
                         e.duration = duration
                         break
 
@@ -266,7 +266,7 @@ class MusicRepr:
                 for e in bars[-1][::-1]:
                     if isinstance(e, Note):
                         velocity = int(token.split('_')[1])
-                        assert velocity in const.velocity_bins
+                        assert velocity in const.velocity_bins, f"velocity={velocity} is not in the velocity bins"
                         e.velocity = velocity
                         break
 
@@ -280,7 +280,7 @@ class MusicRepr:
         if const is None:
             const = Constants()
             
-        return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]))
+        return MusicRepr.from_string(' '.join([const.all_tokens[idx] for idx in indices]), const=const)
 
     @staticmethod
     def from_single_pianoroll(pianoroll : np.array, inst : str, const : Constants = None):
