@@ -360,6 +360,17 @@ class MusicRepr:
             events += seq.events
         return MusicRepr(events, const=consts[0])
 
+    def remove_instruments(self, instruments_to_remove : list):
+        assert len(instruments_to_remove) > 0, "please specify at least one instrument to remove."
+        tracks = self.separate_tracks()
+        tracks = dict([(inst, tracks[inst]) for inst in tracks if inst not in instruments_to_remove])
+        return MusicRepr.merge_tracks(tracks)
+
+    def keep_instruments(self, instruments_to_keep : list):
+        assert len(instruments_to_keep) > 0, "please specify at least one instrument to keep."
+        tracks = self.separate_tracks()
+        tracks = dict([(inst, tracks[inst]) for inst in tracks if inst in instruments_to_keep])
+        return MusicRepr.merge_tracks(tracks)
 
     ## Output
     def to_remi(self, ret='token', add_eos=False):
