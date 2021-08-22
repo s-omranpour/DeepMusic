@@ -1,17 +1,28 @@
-# DeepNote
-DeepNote is a high level python package with following features:
+# DeepMusic
+DeepMusic is a high level python package with following features:
  - supporting different formats like MIDI, REMI, Compound Word and pianoroll. [1, 2]
  - representing musical data in a very simple but useful way for high level music theoretic manipulations.
  - preprocessing musical data in order to feed them to neural networks (chord extraction, quantization and numericalization).
  - supporting metrics used for evaluating generated sequences. [3, 4]
 
 ## Install
-`pip install deepnote`
+
+
+### With pip
+`pip install deepmusic`
+
+
+### From source
+```
+git clone https://github.com/s-omranpour/DeepMusic
+cd DeepMusic
+pip install .
+```
 
 
 ## Usage
 ```python
-from deepnote import MusicRepr
+from deepmusic import MusicRepr
 
 ## reading a midi file
 seq = MusicRepr.from_file('test.mid')
@@ -33,6 +44,8 @@ print(len(bars))
 
 
 for more details please see `examples`.
+
+
 
 ## References
 [1] Pop Music Transformer: Beat-based Modeling and Generation of Expressive Pop Piano Compositions, Yu-Siang Huang, Yi-Hsuan Yang
