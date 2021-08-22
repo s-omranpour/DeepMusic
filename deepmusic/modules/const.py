@@ -66,7 +66,7 @@ class Constants:
         self.velocity_bins = np.linspace(1, 127, num_velocity_bins, dtype=int)
 
         ## REMI tokens
-        self.all_tokens = ['Bar', 'EOS'] +\
+        self.all_tokens = ['Bar', 'EOS', 'MASK'] +\
             ['BeatPosition_'+str(p) for p in self.position_bins]+ \
                 ['BeatTempo_'+str(t) for t in self.tempo_bins]+ \
                     ['BeatChord_'+str(c) for c in self.chords] + \
