@@ -3,14 +3,14 @@ from setuptools import setup
 url = 'https://github.com/s-omranpour/DeepNote'
 
 setup(
-    name='deepnote',
-    version='0.2.3',
+    name='deepmusic',
+    version='0.2.4',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
     url=url,
     author='Soroush Omranpour',
     author_email='soroush.333@gmail.com',
     keywords='midi, deep learning, music',
-    packages=['deepnote'],
+    packages=['deepmusic'],
     python_requires='>=3.7, <4',
     install_requires=[
         'numpy >= 1.7.0', 
