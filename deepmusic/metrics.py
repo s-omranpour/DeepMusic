@@ -95,5 +95,5 @@ def chord_progression_irregularity(seq : MusicRepr, ngram=3, ret_unique_ngrams=F
     return res
 
 
-def structureness_indicator(seq : MusicRepr): 
+def structuredness_indicator(seq : MusicRepr): 
     raise NotImplementedError

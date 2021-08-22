@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from copy import deepcopy
 from chorder import Dechorder
 from midi2audio import FluidSynth
@@ -6,7 +7,7 @@ from midi2audio import FluidSynth
 from miditoolkit.midi import parser as mid_parser
 from miditoolkit.midi.containers import Marker
 
-from .modules import *
+from .classes import *
 from .const import Constants
 
 def midi_to_audio(midi_path, audio_path, sf2_path='assets/soundfonts/general.sf2'):
@@ -25,19 +26,18 @@ def sort_bar_beats(bar):
 
     res = []
     for pos in sorted(poses, key=lambda x: x.position):
-        res += [pos] + poses[pos]
+        res += [pos] + sorted(poses[pos], key=lambda x: x.pitch)
     return res
 
-def remove_excess_pos(seq):
+def remove_excess_pos(events):
     res = []
-    for i,e in enumerate(seq[:-1]):
-        if isinstance(e, Metric) and isinstance(seq[i+1], Metric) and e.position > 0:
-            if e.position == seq[i+1].position or (e.tempo is None and e.chord is None):
+    for i,e in enumerate(events[:-1]):
+        if isinstance(e, Metric) and isinstance(events[i+1], Metric) and e.position > 0:
+            if e.position == events[i+1].position or (e.tempo is None and e.chord is None):
                 continue
-        else:
-            res += [e]
-    if not (isinstance(seq[-1], Metric) and seq[-1].position > 0 and seq[-1].tempo is None and seq[-1].chord is None):
-        res += [seq[-1]]
+        res += [e]
+    if not (isinstance(events[-1], Metric) and events[-1].position > 0 and events[-1].tempo is None and events[-1].chord is None):
+        res += [events[-1]]
     return res
 
 def flatten(ls):
@@ -70,7 +70,6 @@ def compare_bars(bar1, bar2):
             return False
     return True
 
-
 def merge_bars(bars : dict, key_inst : str):
     poses = dict(
         [(i, 
@@ -102,6 +101,43 @@ def merge_bars(bars : dict, key_inst : str):
             for inst in poses[pos]['notes']:
                 res += poses[pos]['notes'][inst]
     return res
+
+def pianoroll_bar_to_events(bar : np.array, inst : str, const : Constants):
+    padded = np.pad(bar[:128], ((0, 0), (1, 1)))
+    diff = np.diff(padded.astype(np.int8), axis=1)
+    pitches, note_ons = np.where(
+        ((diff < 0) & (padded[:, 1:] > 0)) | (diff > 0)
+    )
+    note_offs = np.where(
+        ((diff > 0) & (padded[:, :-1] > 0)) | (diff < 0)
+    )[1]
+
+    poses = {}
+    for pitch, on, off in zip(pitches, note_ons, note_offs):
+        velocity = int(bar[pitch, on])
+        if on not in poses:
+            poses[on] = {'notes' : [], 'tempo' : None, 'chord' : None}
+        poses[on]['notes'] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
+    
+    if bar.shape[0] == 130:
+        for idx in np.where(bar[128] > 0)[0]:
+            if idx not in poses:
+                poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
+            poses[idx]['tempo'] = const.tempo_bins[int(bar[128, idx]) - 1]
+
+        for idx in np.where(bar[129] > 0)[0]:
+            if idx not in poses:
+                poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
+            poses[idx]['chord'] = const.chords[int(bar[129, idx]) - 1]
+
+    events = [Metric()]
+    for idx in sorted(poses):
+        if idx > 0:
+            events += [Metric(position=idx)]
+        events[-1].tempo = poses[idx]['tempo']
+        events[-1].chord = poses[idx]['chord']
+        events += sorted(poses[idx]['notes'], key=lambda x: x.pitch)
+    return events
 
 
 def analyze_midi(midi):

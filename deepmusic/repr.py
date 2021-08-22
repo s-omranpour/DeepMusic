@@ -6,12 +6,7 @@ from collections import defaultdict
 import numpy as np
 from copy import deepcopy
 
-from numpy.core.defchararray import ljust
-from numpy.lib.arraysetops import isin
-
-from deepnote.const import Constants
-from deepnote.modules import *
-from deepnote import utils
+from deepmusic.modules import utils, Constants, Note, Metric, Event
 
 
 class MusicRepr:
@@ -181,7 +176,7 @@ class MusicRepr:
                     beat.chord = e.text
                 if isinstance(e, ct.TempoChange):
                     beat.tempo = e.tempo
-            res += [beat] + notes
+            res += [beat] + sorted(notes, key=lambda x: x.pitch)
         return MusicRepr(res, const=const)
 
 
@@ -203,7 +198,8 @@ class MusicRepr:
         res = []
         for bar in bars:
             res += utils.sort_bar_beats(bar)
-        return MusicRepr(utils.remove_excess_pos(res), const=const)
+        res = utils.remove_excess_pos(res)
+        return MusicRepr(res, const=const)
 
     @staticmethod
     def from_string(text, const : Constants = None):
@@ -284,53 +280,11 @@ class MusicRepr:
 
     @staticmethod
     def from_single_pianoroll(pianoroll : np.array, inst : str, const : Constants = None):
-        def from_pianoroll_bar(bar : np.array):
-            binarized = bar > 0
-            padded = np.pad(binarized, ((0, 0), (1, 1)))
-            diff = np.diff(padded.astype(np.int8), axis=1)
-
-            positives = np.nonzero((diff > 0))
-            pitches = positives[0]
-            note_ons = positives[1]
-            note_offs = np.nonzero((diff < 0))[1]
-
-            poses = {}
-            for idx, pitch in enumerate(pitches):
-                on = note_ons[idx] 
-                off = note_offs[idx]
-                velocity = bar[on, pitch]
-
-                if on not in poses:
-                    poses[on] = {'notes' : [], 'tempo' : None, 'chord' : None}
-                poses[on]['notes'] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
-            
-            if bar.shape[0] == 130:
-                for idx in np.where(bar[128] > 0):
-                    if idx not in poses:
-                        poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
-                    poses[idx]['tempo'] = const.tempo_bins[bar[128, idx] - 1]
-
-                for idx in np.where(bar[129] > 0):
-                    if idx not in poses:
-                        poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
-                    poses[idx]['chord'] = const.chords[bar[129, idx] - 1]
-            
-
-            events = [Metric()]
-            for idx in sorted(poses):
-                if idx > 0:
-                    events += [Metric(position=idx)]
-                events[-1].tempo = poses[idx]['tempo']
-                events[-1].chord = poses[idx]['chord']
-                events += poses[idx]['notes']
-            return events
-
-
         if const is None:
             const = Constants()
         events = []
         for i in range(0, pianoroll.shape[1], const.n_bar_steps):
-            events += from_pianoroll_bar(pianoroll[:, i:const.n_bar_steps])
+            events += utils.pianoroll_bar_to_events(pianoroll[:, i:i+const.n_bar_steps], inst, const)
         return MusicRepr(events, const)
 
 

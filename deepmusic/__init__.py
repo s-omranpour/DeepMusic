@@ -1,3 +1,2 @@
-from .const import Constants
-from .modules import *
-from .repr import MusicRepr
+from deepmusic.modules import Constants, Note, Metric, utils
+from deepmusic.repr import MusicRepr

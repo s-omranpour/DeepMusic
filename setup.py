@@ -10,7 +10,7 @@ setup(
     author='Soroush Omranpour',
     author_email='soroush.333@gmail.com',
     keywords='midi, deep learning, music',
-    packages=['deepmusic'],
+    packages=['deepmusic', 'deepmusic.modules'],
     python_requires='>=3.7, <4',
     install_requires=[
         'numpy >= 1.7.0', 
