@@ -1,10 +1,10 @@
 from setuptools import setup
 
-url = 'https://github.com/s-omranpour/DeepNote'
+url = 'https://github.com/s-omranpour/DeepMusic'
 
 setup(
     name='deepmusic',
-    version='0.2.4',
+    version='0.2.5',
     description='A python package to manipulate MIDI files, representing them and converting them into a proper format for feeding to machine learning models.',
     url=url,
     author='Soroush Omranpour',
