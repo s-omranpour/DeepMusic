@@ -56,11 +56,31 @@ class MusicEvent:
             if idx >= len(tokens):
                 break
             if tokens[idx].startswith(attr):
-                values[i] = int(tokens[idx][len(attr):])
+                values[i] = int(tokens[idx][len(attr):]) + 1
                 idx += 1
             else:
                 values[i] = 0
         return MusicEvent(pos, *values)
+
+    def set_metric_attributes(self, position, tempo, chord):
+        self.position = position
+        self.tempo = tempo
+        self.chord = chord
+
+    def set_note_attributes(self, note_pitch, note_duration, note_velocity):
+        self.note_pitch = note_pitch
+        self.note_duration = note_duration
+        self.note_velocity = note_velocity
+
+    def change_const(self, const: Constants):
+        if const is not None and self.const != const:
+            self.position = int(np.round(self.position * const.n_bar_steps / self.const.n_bar_steps))
+            if self.tempo > 0:
+                self.tempo = np.argmin(np.abs(const.tempo_bins - self.const.tempo_bins[self.tempo]))
+            self.note_duration = int(np.round(self.note_duration * const.n_bar_steps / self.const.n_bar_steps))
+            if self.note_velocity > 0:
+                self.note_velocity = np.argmin(np.abs(const.velocity_bins - self.const.velocity_bins[self.note_velocity]))
+            self.const = const
 
     def __repr__(self, pretty=False):
         cls = 'Bar' if self.position == 0 else 'Beat'
@@ -90,20 +110,10 @@ class MusicEvent:
     def __hash__(self):
         return hash((self.position, self.tempo, self.chord, self.note_pitch, self.note_duration, self.note_velocity))
 
-    def change_const(self, const: Constants):
-        if const is not None and self.const != const:
-            self.position = int(np.round(self.position * const.n_bar_steps / self.const.n_bar_steps))
-            if self.tempo > 0:
-                self.tempo = np.argmin(np.abs(const.tempo_bins - self.const.tempo_bins[self.tempo]))
-            self.note_duration = int(np.round(self.note_duration * const.n_bar_steps / self.const.n_bar_steps))
-            if self.note_velocity > 0:
-                self.note_velocity = np.argmin(np.abs(const.velocity_bins - self.const.velocity_bins[self.note_velocity]))
-            self.const = const
-
     def to_cp(self):
         return [self.position, self.tempo, self.chord, self.note_pitch, self.note_duration, self.note_velocity]
 
-    def to_remi(self, to_list=True):
+    def to_remi(self):
         res = ['Bar' if self.position == 0 else 'BeatPosition' + str(self.position)]
         if self.tempo > 0:
             res += ['Tempo'+str(self.tempo)]
@@ -111,8 +121,14 @@ class MusicEvent:
             res += ['Chord' + str(self.chord)]
         if self.note_pitch > 0:
             res += [
-                'NotePitch' + str(self.note_pitch),
-                'NoteDuration' + str(self.note_duration),
-                'NoteVelocity' + str(self.note_velocity)
+                'NotePitch' + str(self.note_pitch - 1),
+                'NoteDuration' + str(self.note_duration - 1),
+                'NoteVelocity' + str(self.note_velocity - 1)
             ]
-        return res if to_list else ' '.join(res)
+        return res
+    
+    def has_note(self):
+        return self.note_pitch > 0
+
+    def has_metric(self):
+        return bool(self.tempo + self.chord)

@@ -3,10 +3,10 @@ import numpy as np
 from scipy.stats import entropy
 import itertools
 
-from .repr import MusicRepr
+from .container import Music
 from .scale import Scale
 
-def pitch_histogram_entropy(seq : MusicRepr, window : int = 1, pitch_class: bool = False, return_probs=True):
+def pitch_histogram_entropy(seq : Music, window : int = 1, pitch_class: bool = False, return_probs=True):
     """
     seq : input sequence
     window : number of bars as window
@@ -20,7 +20,7 @@ def pitch_histogram_entropy(seq : MusicRepr, window : int = 1, pitch_class: bool
     ents = []
     probs = []
     for idx in range(0, n-window+1):
-        piece = MusicRepr.concatenate(bars[idx:idx+window]).to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False)
+        piece = Music.concatenate(bars[idx:idx+window]).to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False)
         pitch_acts = piece.sum(axis=1)
         if pitch_class:
             res = []
@@ -35,15 +35,15 @@ def pitch_histogram_entropy(seq : MusicRepr, window : int = 1, pitch_class: bool
     return np.array(ents)
 
 
-def polyphony(seq : MusicRepr):
+def polyphony(seq : Music):
     pitch_ons = seq.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False).sum(axis=0)
     return pitch_ons.sum()/np.sum(pitch_ons > 0)
 
-def polyphony_rate(seq : MusicRepr):
+def polyphony_rate(seq : Music):
     pitch_ons = seq.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False).sum(axis=0)
     return np.sum(pitch_ons > 0) / pitch_ons.shape[0]
 
-def pitch_in_scale_rate(seq : MusicRepr):
+def pitch_in_scale_rate(seq : Music):
     scale = Scale()
     pianoroll = seq.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False)
 
@@ -65,11 +65,11 @@ def pitch_in_scale_rate(seq : MusicRepr):
         scores[chord] = scores[chord]['score'] / scores[chord]['n_pitches'] if scores[chord]['n_pitches'] > 0 else 0.
     return scores
 
-def empty_beat_rate(seq: MusicRepr):
+def empty_beat_rate(seq: Music):
     note_ons = seq.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False).sum(axis=0)
     return np.sum(note_ons == 0) / note_ons.shape[0]
 
-def grooving_pattern_similarity(seq : MusicRepr):
+def grooving_pattern_similarity(seq : Music):
     def xor_distance(bar1, bar2):
         onsets1 = bar1.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False).sum(axis=0)
         onsets2 = bar2.to_pianoroll(separate_tracks=False, binarize=True, add_tempo_chord=False).sum(axis=0)
@@ -82,7 +82,7 @@ def grooving_pattern_similarity(seq : MusicRepr):
         scores += [xor_distance(bars[idx1], bars[idx2])]
     return np.mean(scores)
 
-def chord_progression_irregularity(seq : MusicRepr, ngram=3, ret_unique_ngrams=False):
+def chord_progression_irregularity(seq : Music, ngram=3, ret_unique_ngrams=False):
     chords = [e.chord for e in list(filter(lambda x: isinstance(x, Metric), seq.events)) if e.chord is not None]
     num_ngrams = len(chords) - ngram
     unique_set = set()
@@ -95,5 +95,5 @@ def chord_progression_irregularity(seq : MusicRepr, ngram=3, ret_unique_ngrams=F
     return res
 
 
-def structuredness_indicator(seq : MusicRepr): 
+def structuredness_indicator(seq : Music): 
     raise NotImplementedError

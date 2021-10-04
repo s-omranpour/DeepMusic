@@ -2,57 +2,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from chorder import Dechorder
-from midi2audio import FluidSynth
 
 from miditoolkit.midi import parser as mid_parser
 from miditoolkit.midi.containers import Marker
 
-from .classes import *
+from .event import MusicEvent
 from .const import Constants
 
-def midi_to_audio(midi_path, audio_path, sf2_path='assets/soundfonts/general.sf2'):
-    FluidSynth(sf2_path).midi_to_audio(midi_path, audio_path)
+def sort_events_in_bar(events):
+    return sorted(events, key=lambda x: (x.position, int(x.tempo > 0) + int(x.chord > 0)))
 
-def sort_bar_beats(bar):
-    assert isinstance(bar[0], Metric) and bar[0].position == 0, "First event in a bar should be a Bar()"
-    poses = {}
-    prev_pos = None
-    for e in bar:
-        if isinstance(e, Metric):
-            prev_pos = e
-            poses[prev_pos] = []
-        elif isinstance(e, Note):
-            poses[prev_pos] += [e]
+def remove_empty_events(events):
+    return list(filter(lambda x: x.has_note() or x.has_metric()))
 
-    res = []
-    for pos in sorted(poses, key=lambda x: x.position):
-        res += [pos] + sorted(poses[pos], key=lambda x: x.pitch)
-    return res
-
-def remove_excess_pos(events):
-    res = []
-    for i,e in enumerate(events[:-1]):
-        if isinstance(e, Metric) and isinstance(events[i+1], Metric) and e.position > 0:
-            if e.position == events[i+1].position or (e.tempo is None and e.chord is None):
-                continue
-        res += [e]
-    if not (isinstance(events[-1], Metric) and events[-1].position > 0 and events[-1].tempo is None and events[-1].chord is None):
-        res += [events[-1]]
-    return res
+def remove_identical_events_in_bar(events):
+    return sort_events_in_bar(set(events))
 
 def flatten(ls):
     res = []
     for l in ls:
         res += l
     return res
-
-def clean_cp(cp):
-    for c in cp:
-        if c[0] == 0:
-            c[4:] = 0
-        if c[0] == 1:
-            c[1:4] = 0
-    return cp
 
 def compare_bars(bar1, bar2):
     last_pos1 = set()

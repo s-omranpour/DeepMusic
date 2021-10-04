@@ -5,7 +5,7 @@ PITCHES = np.arange(0, 128)
 PIRCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 CHORD_QUALITIES = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
 CHORDS = ['_'.join(e) for e in itertools.product(PIRCH_CLASSES, CHORD_QUALITIES)]
-INSTRUMENT_PROGRAMS = np.arange(0, 128)
+INSTRUMENT_PROGRAMS = np.arange(0, 256)
 INSTRUMENT_FAMILIES = [
     'piano',
     'percussion',
@@ -35,7 +35,7 @@ class Constants:
         max_tempo=300,
         num_tempo_bins=30, 
         num_velocity_bins=30, 
-        use_inst_family=False, 
+        use_program=False, 
         ):
 
         ## time
@@ -63,17 +63,22 @@ class Constants:
         self.num_velocity_bins = num_velocity_bins
         self.velocity_bins = np.linspace(1, 127, num_velocity_bins, dtype=int)
 
-        ## REMI tokens
-        self.use_inst_family = use_inst_family
-        self.all_tokens = ['Bar', 'EOS', 'MASK'] +\
-            ['BeatPosition_'+str(p) for p in self.position_bins]+ \
-                ['BeatTempo_'+str(t) for t in self.tempo_bins]+ \
-                    ['BeatChord_'+str(c) for c in self.chords] + \
-                        ['NoteInstrumentFamily_'+str(inst) for inst in INSTRUMENT_FAMILIES] if use_inst_family else ['NoteInstrument_'+str(inst) for inst in INSTRUMENT_PROGRAMS] + \
-                            ['NotePitch_'+str(i) for i in self.pitches] + \
-                                ['NoteDuration_'+str(d) for d in self.duration_bins] + \
-                                    ['NoteVelocity_'+str(v)for v in self.velocity_bins]
-
+        ## tokens
+        self.use_program = use_program
+        self.special_tokens = ['BOS', 'EOS', 'MASK']
+        self.position_tokens = ['Bar'] + ['BeatPosition_'+str(p) for p in self.position_bins]
+        self.tempo_tokens = ['Tempo_'+str(t) for t in self.tempo_bins]
+        self.chord_tokens = ['Chord_'+str(c) for c in CHORDS]
+        self.pitch_tokens = ['NotePitch_'+str(i) for i in PITCHES]
+        self.duration_tokens = ['NoteDuration_'+str(d) for d in self.duration_bins]
+        self.velocity_tokens = ['NoteVelocity_'+str(v)for v in self.velocity_bins]
+        self.program_tokens = ['NoteInstrument_'+str(inst) for inst in INSTRUMENT_PROGRAMS]
+        self.inst_family_tokens = ['NoteInstrumentFamily_'+str(inst) for inst in INSTRUMENT_FAMILIES]
+        self.remi_tokens =  self.special_tokens + self.position_tokens + self.tempo_tokens +\
+            self.chord_tokens + self.pitch_tokens + self.duration_tokens + self.velocity_tokens
+        self.remi_tokens_with_program = self.remi_tokens + self.program_tokens
+        self.remi_tokens_with_inst_family = self.remi_tokens + self.inst_family_tokens
+        
 
     def update_resolution(self, tick_resol):
         self.tick_resol = tick_resol
@@ -85,11 +90,10 @@ class Constants:
 
     def __eq__(self, o: object):
         if isinstance(o, Constants):
-            return self.use_inst_family == o.use_inst_family and \
-                self.unit == o.unit and\
-                    self.tick_resol == o.tick_resol and \
-                        self.min_tempo == o.min_tempo and \
-                            self.max_tempo == o.max_tempo and \
-                                self.num_tempo_bins == o.num_tempo_bins and \
-                                    self.num_velocity_bins == o.num_velocity_bins
+            return self.unit == o.unit and\
+                self.tick_resol == o.tick_resol and \
+                    self.min_tempo == o.min_tempo and \
+                        self.max_tempo == o.max_tempo and \
+                            self.num_tempo_bins == o.num_tempo_bins and \
+                                self.num_velocity_bins == o.num_velocity_bins
         return False
