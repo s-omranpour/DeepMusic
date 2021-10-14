@@ -9,14 +9,43 @@ from miditoolkit.midi.containers import Marker
 from .event import MusicEvent
 from .const import Constants
 
-def sort_events_in_bar(events):
-    return sorted(events, key=lambda x: (x.position, int(x.tempo > 0) + int(x.chord > 0)))
+def sort_events(events):
+    return sorted(events, key=lambda x: (x.bar, x.position, x.note_pitch, x.note_duration, x.note_velocity))
 
 def remove_empty_events(events):
-    return list(filter(lambda x: x.has_note() or x.has_metric()))
+    return list(filter(lambda x: not x.is_empty(), events))
 
-def remove_identical_events_in_bar(events):
-    return sort_events_in_bar(set(events))
+def sort_and_remove_identical_events(events):
+    return sort_events(set(events))
+
+def remove_duplicate_metrics_from_remi(remi : str):
+    tokens = remi.split()
+    res = []
+    prev_beat = 0
+    prev_tempo = 0
+    prev_chord = 0
+    for tok in tokens:
+        if tok.startswith('Bar'):
+            res += [tok]
+            prev_beat = 0
+        elif tok.startswith('Beat'):
+            beat = int(tok[4:])
+            if beat != prev_beat:
+                res += [tok]
+                prev_beat = beat
+        elif tok.startswith('Tempo'):
+            tempo = int(tok[5:])
+            if tempo != prev_tempo:
+                res += [tok]
+                prev_tempo = tempo
+        elif tok.startswith('Chord'):
+            chord = int(tok[5:])
+            if chord != prev_chord:
+                res += [tok]
+                prev_chord = chord
+        else:
+            res += [tok]
+    return res
 
 def flatten(ls):
     res = []
@@ -24,90 +53,16 @@ def flatten(ls):
         res += l
     return res
 
-def compare_bars(bar1, bar2):
-    last_pos1 = set()
-    last_pos2 = set()
-    for e1, e2 in zip(bar1.events, bar2.events):
-        if isinstance(e1, Metric) and isinstance(e2, Metric):
-            if e1 != e2 or last_pos1 != last_pos2:
-                return False
-            last_pos1 = set()
-            last_pos2 = set()
-        elif isinstance(e1, Note) and isinstance(e2, Note):
-            last_pos1.update([e1])
-            last_pos2.update([e2])
-        else:
-            return False
-    return True
-
-def merge_bars(bars : dict, key_inst : str):
-    poses = dict(
-        [(i, 
-          {
-              'empty':True, 
-              'chord' : None,
-              'tempo' : None,
-              'notes':dict([(inst, []) for inst in bars])
-          }
-         )
-         for i in range(bars[key_inst].const.unit * 4)]
-    )
-    for inst in bars:
-        prev_pos = 0
-        for e in bars[inst].events:
-            if isinstance(e, Metric):
-                prev_pos = e.position
-                poses[prev_pos]['empty'] = False
-                if inst == key_inst:
-                    poses[prev_pos]['chord'] = e.chord
-                    poses[prev_pos]['tempo'] = e.tempo
-            elif isinstance(e, Note):
-                poses[prev_pos]['notes'][inst] += [e]
-
-    res = []
-    for pos in poses:
-        if not poses[pos]['empty']:
-            res += [Metric(position=pos, tempo=poses[pos]['tempo'], chord=poses[pos]['chord'])]
-            for inst in poses[pos]['notes']:
-                res += poses[pos]['notes'][inst]
+def classify_events_by_attr(events, attrs):
+    res = {}
+    for e in events:
+        val = tuple([e.__getattribute__(attr) for attr in attrs])
+        if len(val) == 1:
+            val = val[0]
+        if val not in res:
+            res[val] = []
+        res[val] += [e]
     return res
-
-def pianoroll_bar_to_events(bar : np.array, inst : str, const : Constants):
-    padded = np.pad(bar[:128], ((0, 0), (1, 1)))
-    diff = np.diff(padded.astype(np.int8), axis=1)
-    pitches, note_ons = np.where(
-        ((diff < 0) & (padded[:, 1:] > 0)) | (diff > 0)
-    )
-    note_offs = np.where(
-        ((diff > 0) & (padded[:, :-1] > 0)) | (diff < 0)
-    )[1]
-
-    poses = {}
-    for pitch, on, off in zip(pitches, note_ons, note_offs):
-        velocity = int(bar[pitch, on])
-        if on not in poses:
-            poses[on] = {'notes' : [], 'tempo' : None, 'chord' : None}
-        poses[on]['notes'] += [Note(inst_family=inst, pitch=pitch, duration=off-on, velocity=velocity)]
-    
-    if bar.shape[0] == 130:
-        for idx in np.where(bar[128] > 0)[0]:
-            if idx not in poses:
-                poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
-            poses[idx]['tempo'] = const.tempo_bins[int(bar[128, idx]) - 1]
-
-        for idx in np.where(bar[129] > 0)[0]:
-            if idx not in poses:
-                poses[idx] = {'notes' : [], 'tempo' : None, 'chord' : None}
-            poses[idx]['chord'] = const.chords[int(bar[129, idx]) - 1]
-
-    events = [Metric()]
-    for idx in sorted(poses):
-        if idx > 0:
-            events += [Metric(position=idx)]
-        events[-1].tempo = poses[idx]['tempo']
-        events[-1].chord = poses[idx]['chord']
-        events += sorted(poses[idx]['notes'], key=lambda x: x.pitch)
-    return events
 
 
 def analyze_midi(midi):

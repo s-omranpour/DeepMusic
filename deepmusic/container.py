@@ -9,7 +9,9 @@ from copy import deepcopy
 from miditoolkit.midi.parser import MidiFile
 from miditoolkit.midi import containers as ct
 from midi2audio import FluidSynth
-from numpy.lib.function_base import insert
+from numpy.core.fromnumeric import shape
+
+from deepmusic.utils import flatten
 
 from .const import INSTRUMENT_FAMILIES, CHORDS, Constants
 from .event import MusicEvent
@@ -27,6 +29,7 @@ class Music:
         n_bars = [t.get_bar_count() for t in tracks]
         max_bars = max(n_bars)
         for i,t in enumerate(tracks):
+            t.clean()
             if t.pad_with_bar(right=max_bars - n_bars[i]):
                 logging.warn(f'Track no. {i+1} is padded to the max_n_bars={max_bars}.')
         self.tracks = tracks
@@ -60,40 +63,64 @@ class Music:
         return Music(tracks, file_path)
 
     @staticmethod
-    def from_pianoroll():
-        pass
+    def from_pianoroll(rolls : Dict[int, np.array], const : Constants):
+        if const is None:
+            const = Constants()
+        tracks = [Track.from_pianoroll(v, k, const) for k,v in rolls.items()]
+        return Music(tracks)
 
     @staticmethod
     def from_indices(indices : List, const : Constants = None):
         if const is None:
             const = Constants()
-        return Music.from_remi([const.remi_tokens[idx] for idx in indices], const)
-
+        return Music.from_tokens(const.decode(indices), const)
 
     @staticmethod
-    def from_remi(remi : List, const : Constants = None):
+    def from_tokens(tokens : List, const : Constants = None):
         if const is None:
             const = Constants()
-        prev_pos = 'Bar'
-        pass
+
+        tracks = {}
+        prev_pos_tok = None
+        prev_tempo_tok = None
+        prev_chord_tok = None
+        nb = -1
+        for idx,tok in enumerate(tokens):
+            if tok.startswith('Bar'):
+                nb += 1
+                prev_pos_tok = tok
+            elif tok.startswith('Beat'):
+                prev_pos_tok = tok
+            elif tok.startswith('Tempo'):
+                prev_tempo_tok = tok
+            elif tok.startswith('Chord'):
+                prev_chord_tok = tok
+            elif tok.startswith('NotePitch'):
+                assert tokens[idx+1].startswith('NoteDuration') and tokens[idx+2].startswith('NoteVelocity') and tokens[idx+3].startswith('NoteInstrument')
+                program = int(tokens[idx+3][14:])
+                if program not in tracks:
+                    tracks[program] = []
+                tracks[program] += [MusicEvent.from_tokens([prev_pos_tok, prev_tempo_tok, prev_chord_tok] + tokens[idx:idx+3], bar=nb, const=const)] 
+        tracks = [Track(k, v) for k,v in tracks.items()]
+        return Music(tracks)
 
     @staticmethod
-    def from_cp(cp : Union[List[List], np.array], const : Constants = None, use_program=True):
-        cp = np.array(cp)
-        assert len(cp.shape) == 2 and cp.shape[1] == 7, "Invalid cp shape."
+    def from_tuples(tuples : Union[List[List], np.array], const : Constants = None):
+        tuples = np.array(tuples)
+        assert len(tuples.shape) == 2 and tuples.shape[1] == 7, "Invalid tuples shape."
         if const is None:
             const = Constants()
         
         tracks = []
-        programs = set(cp[:, -1])
+        programs = set(tuples[:, -1])
         for program in programs:
-            cp_track = cp[cp[:, -1] == program][:, :-1]
-            events = [MusicEvent.from_cp(c, const) for c in cp_track]
-            tracks += [Track(program*8 if const.use_program else program, events).reorder_beats()]
+            track = tuples[tuples[:, -1] == program][:, :-1]
+            events = [MusicEvent.from_tuple(t, const) for t in track]
+            tracks += [Track(program, events)]
         return Music(tracks)
 
     @staticmethod
-    def merge(musics : List, merge_programs=True):
+    def merge(musics : List, merge_similar_programs=True):
         """
             if merge == True:
                 merge tracks with same program and different names
@@ -101,8 +128,12 @@ class Music:
                 merge tracks with same program and name
         """
         tracks = utils.flatten([m.get_tracks() for m in musics])
-        res = Music(tracks, name = 'Merged '+', '.join([m.name for m in musics]))
-        res.merge_similar_tracks(~merge_programs)
+        res = Music(tracks, name = 'Merged from '+', '.join([m.name for m in musics]))
+        if merge_similar_programs:
+            programs = set([t.program for t in res.tracks])
+            for program in programs:
+                indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == program]
+                res.merge_tracks(indices)
         return res      
 
     @staticmethod
@@ -122,15 +153,14 @@ class Music:
             all_tracks += music.get_tracks()
         res = Music(all_tracks, 'Concatenated '+', '.join([music.name for music in musics]))
         res.pad_tracks_to_same_length()
-        res.merge_similar_tracks(~merge_programs)
+        res.merge_tracks(~merge_programs)
         return res
 
-    def merge_similar_tracks(self, use_name=True):
-        ids = set([(t.program, t.name if use_name else '') for t in tracks])
-        super_tracks = []
-        for id in ids:
-            super_tracks += [Track.merge_tracks(list(filter(lambda x: x.program == id[0] and x.name == id[1], self.tracks)))]
-        self.tracks = super_tracks
+    def merge_tracks(self, indices):
+        selected_tracks = [self.tracks[idx] for idx in indices]
+        for idx in indices:
+            self.tracks.pop(idx)
+        self.tracks += [Track.merge_tracks(selected_tracks)]
 
     def pad_with_bar(self, left : int = 0, right : int = 0):
         for track in self.tracks:
@@ -198,14 +228,32 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_remi(self, ret='token', add_eos=False, use_program=True):
-        pass
+    def to_tokens(self, return_indices=True, add_eos=False):
+        res = []
+        tracks = [t.organize() for t in self.tracks]
+        for bars in zip(*tracks):
+            for beat in range(self.const.n_bar_steps):
+                for bar in bars:
+                    if beat in bar:
+                        res += bar[beat].to_tokens(remove_duplicate_metrics=True, add_instrument_token=True)
+        res = utils.remove_duplicate_metrics_from_remi(res)
+        if add_eos:
+            res += [self.const.special_tokens[1]]
+        return self.const.encode(res) if return_indices else res
 
-    def to_cp(self, add_eos=False, use_program=True):
-        pass
+    def to_tuples(self, add_eos=False):
+        res = []
+        tracks = [t.organize() for t in self.tracks]
+        for bars in zip(*tracks):
+            for beat in range(self.const.n_bar_steps):
+                for bar in bars:
+                    if beat in bar:
+                        res += [bar[beat].to_tuples(add_instrument_token=True)]
 
-    def to_pianoroll(self, separate_tracks=True, binarize=False, add_tempo_chord=False):
-        pass
+    def to_pianoroll(self, binarize=False, add_tempo_chord=False):
+        rolls = [t.to_pianoroll(binarize=binarize, add_tempo_chord=add_tempo_chord) for t in self.tracks]
+        programs = [t.program for t in self.tracks]
+        return dict(zip(programs, rolls))
 
     def to_midi(self, output_path : str = None):
         instruments, tempo_changes, markers, max_ticks = list(zip(*[t.to_midi_instrument() for t in self.tracks]))
@@ -230,7 +278,7 @@ class Music:
 
 
 class Track:
-    def __init__(self, program : int, events: List, name: str = ''):
+    def __init__(self, program : int, events: List, const : Constants = None, name: str = ''):
         """
             if 0 <= program < 128:
                 instrument is not a drum
@@ -238,7 +286,7 @@ class Track:
                 instrument is drum
         """
         self.events = []
-        self.const = Constants()
+        self.const = Constants() if const is None else const
         self.set_program(program)
         self.add_events(events)
         self.set_name(name)
@@ -257,43 +305,67 @@ class Track:
 
         for tempo in tempo_changes:
             time = tempo.time // const.step
-            if time not in timeline:
-                timeline[time] = {'notes' : [], 'tempo' : 0, 'chord' : 0}
+            while time not in timeline: ## ensure tempo change happens only in presence of a note
+                time += 1
             tempo.tempo = const.tempo_bins[np.argmin(np.abs(const.tempo_bins - int(tempo.tempo)))] ## quantize tempo
             timeline[time]['tempo'] = tempo
         
         for marker in markers:
             if marker.text.startswith('Chord_'):
                 time = marker.time // const.step
-                if time not in timeline:
-                    timeline[time] = {'notes' : [], 'tempo' : 0, 'chord' : 0}
+                while time not in timeline: ## ensure chord change happens only in presence of a note
+                    time += 1
                 marker.text = marker.text[6:]
                 timeline[time]['chord'] = marker
-
-        for pos in range(0, sorted(timeline)[-1] + 1, const.n_bar_steps):
-            if pos not in timeline:
-                timeline[pos] = []
         
         events = []
+        prev_tempo = 0
+        prev_chord = 0
         for pos_idx in sorted(timeline):
             pos_events = []
+            if timeline[pos_idx]['tempo'] is not None:
+                prev_tempo = np.argmin(np.abs(const.tempo_bins - timeline[pos_idx]['tempo']))
+            if timeline[pos_idx]['chord'] is not None:
+                prev_chord = CHORDS.index(timeline[pos_idx]['chord'])
             for note in timeline[pos_idx]['notes']:
                 pos_events += [
                     MusicEvent(
+                        bar = pos_idx // const.n_bar_steps,
                         position = pos_idx % const.n_bar_steps,
+                        tempo=prev_tempo,
+                        chord=prev_chord,
                         note_pitch=note.pitch,
                         note_duration=min(max((note.end - note.start) // const.step, 1), const.n_bar_steps), 
                         note_velocity=np.argmin(np.abs(const.velocity_bins - int(note.velocity)))
                     )
                 ]
-                if len(pos_events) == 0:
-                    pos_events += [MusicEvent(position = pos_idx % const.n_bar_steps)]
-                pos_events[0].set_metric_attributes(
-                    tempo = np.argmin(np.abs(const.tempo_bins - timeline[pos_idx]['tempo'])) if timeline[pos_idx]['tempo'] is not None else 0,
-                    chord = CHORDS.index(timeline[pos_idx]['chord'] if timeline[pos_idx]['chord'] is not None else 0)
-                )
-                events += pos_events
+            events += pos_events
         return Track(instrument.program + (128 if instrument.is_drum else 0), events, instrument.name)
+
+    @staticmethod
+    def from_pianoroll(roll : np.array, program : int, const : Constants = None, name : str = ''):
+        padded = np.pad(roll[:128], ((0, 0), (1, 1)))
+        diff = np.diff(padded.astype(np.int8), axis=1)
+        pitches, note_ons = np.where(diff < 0)
+        note_offs = np.where(diff > 0)[1]
+
+        poses = {}
+        for pitch, on, off in zip(pitches, note_ons, note_offs):
+            if on not in poses:
+                poses[on] = []
+            poses[on] += [
+                MusicEvent(
+                    bar=on // const.n_bar_steps, 
+                    beat=on % const.n_bar_steps, 
+                    tempo=roll[128, on] if roll.shape[0] > 128 else 0,
+                    chord=roll[129, on] if roll.shape[0] > 128 else 0,
+                    note_pitch=pitch, 
+                    note_duration=off - on, 
+                    note_velocity=int(roll[pitch, on]),
+                    const=const
+                )
+            ]
+        return Track(program, flatten([poses[t] for t in sorted(poses)]))
 
     @staticmethod
     def merge_tracks(tracks : List):
@@ -307,28 +379,7 @@ class Track:
         for i,t in enumerate(tracks):
             if t.pad_with_bar(right=max_bars - n_bars[i]):
                 logging.warn(f'Track no. {i+1} is padded to the max_n_bars={max_bars}.')
-        
-        events = []
-        tracks = [t.organize() for t in tracks]
-        for bar_idx in range(max_bars):
-            bar = {}
-            for t in tracks:
-                for k,v in t[bar_idx].items():
-                    if k not in bar:
-                        bar[k] = []
-                    bar[k] += v
-
-            for pos_idx in sorted(bar):
-                tempo = Counter([e.tempo for e in bar[pos_idx]]).most_common(1)[0][0]
-                chord = Counter([e.chord for e in bar[pos_idx]]).most_common(1)[0][0]
-                for e in bar[pos_idx]:
-                    e.tempo = 0
-                    e.chord = 0
-                bar[pos_idx][0].tempo = tempo
-                bar[pos_idx][0].chord = chord
-                events += utils.remove_identical_events_in_bar(utils.remove_empty_events(bar[pos_idx]))
-
-        return Track(program, events, name)
+        return Track(program, utils.flatten([t.events for t in tracks]), name)
                 
     @staticmethod
     def concatente(tracks: List):
@@ -337,20 +388,14 @@ class Track:
         
         program = Counter([t.program for t in tracks]).most_common(1)[0][0]
         name = 'Concatenated :' + ', '.join([t.name for t in tracks])
+        n_prev_bars = [0] + [t.get_bar_count() for t in tracks[:-1]]
         events = []
-        for t in tracks:
-            events += t.events
+        for nb, t in zip(n_prev_bars ,tracks):
+            for e in t.events:
+                e = deepcopy(e)
+                e.set_metric_attributes(bar=e.bar + nb) ## update bar
+                events += [e]
         return Track(program, events, name)
-
-    def set_program(self, program : int):
-        assert 0 <= program < 256, "Invalid program."
-        self.program = program
-        if program < 128:
-            self.inst_family = INSTRUMENT_FAMILIES[program // 8]
-            self.is_drum = False
-        else:
-            self.inst_family = INSTRUMENT_FAMILIES[-1]
-            self.is_drum = True
 
     def add_events(self, events : List):
         if len(events):
@@ -360,6 +405,19 @@ class Track:
                 self.const = consts[0]
             assert consts[0] == self.const, "Inconsistent constants between inserted events and current track."
             self.events += events
+            self.clean()
+        logging.warn('Empty list of events entered.')
+
+    def set_program(self, program : int):
+        assert 0 <= program < 256, "Invalid program."
+        self.program = program
+        if program < 128:
+            self.inst_family = INSTRUMENT_FAMILIES[program // 8]
+            self.is_drum = False
+        else:
+            self.inst_family = INSTRUMENT_FAMILIES[-1]
+            self.is_drum = True    
+        
 
     def set_name(self, name : str):
         assert isinstance(name, str), "Invalid name."
@@ -367,27 +425,28 @@ class Track:
 
     def change_const(self, const : Constants):
         if const is not None and self.const != const:
-            for e in self.events:
+            for e in self.events: ## update constants for each event
                 e.change_const(const)
             self.const = const
 
     def pad_with_bar(self, left : int = 0, right : int = 0):
         if left > 0:
-            self.events = [MusicEvent(const=self.const)] * left + self.events
+            for e in self.events:
+                e.set_metric_attributes(bar=e.bar + left)
+            self.events = [MusicEvent(const=self.const) for _ in range(left)] + self.events
         if right > 0:
-            self.events += [MusicEvent(const=self.const)] * right
+            nb = self.get_bar_count()
+            self.events += [MusicEvent(bar=nb+i+1, const=self.const) for i in range(right)]
         return bool(left + right)
 
     def find_beat_index(self, beat):
         query = beat * self.const.unit
         n_bars = 0
-        prev_idx = 0
         for i, e in enumerate(self.events):
             if e.position == 0:
                 n_bars += 1
-            if query < (n_bars-1)*self.const.n_bar_steps + e.position:
-                return prev_idx
-            prev_idx = i
+            if query <= (n_bars-1)*self.const.n_bar_steps + e.position:
+                return i
         return -1
 
     def slice_by_index(self, start, end):
@@ -395,56 +454,45 @@ class Track:
 
     def slice_by_beat(self, start, end):
         start = self.find_beat_index(start)
-        end = self.find_beat_index(end)
+        end = self.find_beat_index(end + 1)
         return Track(self.program, self.events[start:end], const=self.const, desc=self.desc)
 
     def slice_by_bar(self, start, end):
         start = self.find_beat_index(start*4)
-        end = self.find_beat_index(end*4)
+        end = self.find_beat_index((end + 1)*4)
         return Track(self.program, self.events[start:end], const=self.const, desc=self.desc)
 
     def organize(self):
-        def organize_bar(bar):
-            res = {}
-            beats = bar.get_beats()
-            for beat in beats:
-                res[beat[0].position] = beat
-            return res
-        return [organize_bar(bar) for bar in self.get_bars()]
-
-    def reorder_beats(self):
-        bars = self.get_bars()
-        events = []
-        for bar in bars:
-            events += sorted(bar.events, key=lambda x: (x.position, int(x.tempo > 0) + int(x.chord > 0)))
-        return Track(self.program, events, self.name)
-
-    def get_beats(self):
-        res = [[]]
-        prev_pos = 0
-        for e in self.events:
-            if e.position == prev_pos:
-                res[-1] += [e]
-            else:
-                res += [[e]]
-                prev_pos = e.position
-        for i,beat in enumerate(res):
-            res[i] = Track(self.program, beat, const=self.const, desc=self.desc)
+        res = [utils.classify_events_by_attr(bar.events, ['position']) for bar in self.get_bars()]
+        for idx,bar in enumerate(res):
+            for k,v in bar.items():
+                bar[k] = Track(self.program, v, self.const, f'Bar No. {idx} - Beat No. {k}')
+            res[idx] = bar
         return res
+
+    def clean(self): 
+        # 1. remove empty events 
+        # 2. remove identical events 
+        # 3. sort events
+        # 4. synchronize metrics
+
+        self.events = utils.sort_and_remove_identical_events(utils.remove_empty_events(self.events))
+        bar_beats = utils.classify_events_by_attr(self.events, ['bar', 'beat'])
+        self.events = []
+        for pos in sorted(bar_beats):
+            tempo = Counter([e.tempo for e in bar_beats[pos]]).most_common(1)[0][0] ## use voting to determine the tempo for this position
+            chord = Counter([e.chord for e in bar_beats[pos]]).most_common(1)[0][0] ## use voting to determine the chord for this position
+            for e in bar_beats[pos]: ## all events in a position should have same metrics
+                e.tempo = tempo
+                e.chord = chord
+            self.events += bar_beats[pos]
 
     def get_bars(self):
-        res = []
-        for e in self.events:
-            if e.position == 0:
-                res += [[e]]
-            else:
-                res[-1] += [e]
-        for i,bar in enumerate(res):
-            res[i] = Track(self.program, bar, const=self.const, desc=self.desc)
-        return res
+        res = utils.classify_events_by_attr(self.events, ['bar'])
+        return [Track(self.program, res[i], const=self.const, desc=self.desc + ' - Bar No. ' + str(i)) for i in sorted(res)]
 
     def get_bar_count(self):
-        return len(list(filter(lambda x: x.position == 0, self.events)))
+        return len(set([e.bar for e in self.events]))
 
     def get_instrument(self, family=False):
         return self.inst_family if family else self.program
@@ -462,67 +510,73 @@ class Track:
         tempos = []
         markers = []
         notes = []
-        n_bars = 0
+        prev_values = [None] * 2
         for e in self.events:
-            if e.position == 0:
-                n_bars += 1
-            if e.tempo:
-                tempos += [ct.TempoChange(e.tempo, e.position*self.const.step + (n_bars-1)*self.const.bar_resol)]
-            if e.chord:
-                markers += [ct.Marker('Chord_'+e.chord, e.position*self.const.step + (n_bars-1)*self.const.bar_resol)]
+            tempo = e.get_actual_tempo()
+            if tempo != prev_values[0]:
+                tempos += [ct.TempoChange(tempo, e.get_position_in_ticks())]
+            chord = e.get_actual_chord()
+            if chord != prev_values[1]:
+                markers += [ct.Marker('Chord_'+chord, e.get_position_in_ticks())]
             if e.note_pitch:
-                s = self.const.step * e.position + (n_bars-1)*self.const.bar_resol
                 notes += [
                     ct.Note(
-                        velocity=self.const.velocity_bins[e.velocity - 1], 
+                        velocity=e.get_actual_velocity(), 
                         pitch=e.pitch - 1, 
-                        start=s, 
-                        end=s + e.duration*self.const.step
+                        start=e.get_position_in_ticks(), 
+                        end=e.get_position_in_ticks() + e.get_duration_in_ticks()
                     )
                 ]
-        instrument = ct.Instrument(self.program % 128, self.program > 127)
+        instrument = ct.Instrument(self.program % 128, self.program > 127, name=self.name)
         instrument.notes = sorted(notes, key=lambda x: x.start)
         max_tick = instrument.notes[-1].end
         return instrument, sorted(tempos, key=lambda x: x.time), sorted(markers, key=lambda x: x.time), max_tick
 
     def to_pianoroll(self, binarize=False, add_tempo_chord=True):
         roll = np.zeros(shape=(130, self.get_bar_count()*self.const.n_bar_steps))
-        prev_pos = 0
-        prev_bar = -1
         for e in self.events:
-            if e.position == 0:
-                prev_bar += 1
-            prev_pos = e.position
-            offset = prev_bar*self.const.n_bar_steps + prev_pos
+            offset = e.bar*self.const.n_bar_steps + e.beat
             roll[128:, offset] = [e.tempo, e.chord]
             roll[e.pitch, offset:offset+e.duration] = 1 if binarize else e.velocity
         if add_tempo_chord:
             return roll
         return roll[:128]
 
-    def to_remi(self, add_instrument_token=True, use_program=True):
+    def to_tokens(self, remove_duplicate_metrics=True, add_instrument_token=True):
         res = []
-        prev_pos = 0
+        prev_beat = 0
+        prev_tempo = 0
+        prev_chord = 0
         for e in self.events:
-            if e.position == prev_pos:
-                res += e.to_remi()[1:]
+            toks = e.to_tokens()
+            selected = []
+            if remove_duplicate_metrics:
+                if e.beat != prev_beat:
+                    selected = toks[1]
+                if e.tempo > 0 and e.tempo != prev_tempo:
+                    selected += [toks[2]]
+                if e.chord > 0 and e.chord != prev_chord:
+                    selected += [toks[3]]
             else:
-                res += e.to_remi()
-                prev_pos = e.position
+                selected = toks
             if add_instrument_token and e.has_note():
-                res += ['NoteInstrument_'+str(self.program) if use_program else 'NoteInstrumentFamily_'+str(self.inst_family)]
+                selected += ['NoteInstrument_'+str(self.program)]
+            
+            res += selected
+            prev_beat = e.beat
+            prev_tempo = e.tempo
+            prev_chord = e.chord
         return res
 
-    def to_cp(self, add_instrument_token=True, use_program=True):
+    def to_tuples(self, add_instrument_token=True):
         res = []
         has_note = []
         for e in self.events:
-            res += [e.to_cp()]
+            res += [e.to_tuple()]
             has_note += [e.has_note()]
         res = np.array(res)
         if add_instrument_token: 
-            inst_token = np.array(has_note).astype(int) *\
-                (self.program if use_program else INSTRUMENT_FAMILIES.index(self.inst_family))
+            inst_token = np.array(has_note).astype(int) * self.program
             res = np.concatenate([res, inst_token[:, None]], axis=1)
         return res
 
@@ -537,12 +591,5 @@ class Track:
 
     def __eq__(self, other):
         if isinstance(other, Track):
-            if self.program == other.program and len(self) == len(other) and self.const == other.const:
-                bars = self.get_bars()
-                other_bars = other.get_bars()
-                if len(bars) == len(other_bars):
-                    for bar1, bar2 in zip(bars, other_bars):
-                        if not utils.compare_bars(bar1, bar2):
-                            return False
-                    return True
+            return self.program == other.program and self.const == other.const and len(self) == len(other) and set(self.events) == set(other.events)   
         return False

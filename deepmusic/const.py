@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import itertools
 
@@ -34,9 +35,7 @@ class Constants:
         min_tempo=30,
         max_tempo=300,
         num_tempo_bins=30, 
-        num_velocity_bins=30, 
-        use_program=False, 
-        ):
+        num_velocity_bins=30):
 
         ## time
         self.unit = unit
@@ -64,7 +63,6 @@ class Constants:
         self.velocity_bins = np.linspace(1, 127, num_velocity_bins, dtype=int)
 
         ## tokens
-        self.use_program = use_program
         self.special_tokens = ['BOS', 'EOS', 'MASK']
         self.position_tokens = ['Bar'] + ['BeatPosition_'+str(p) for p in self.position_bins]
         self.tempo_tokens = ['Tempo_'+str(t) for t in self.tempo_bins]
@@ -73,11 +71,8 @@ class Constants:
         self.duration_tokens = ['NoteDuration_'+str(d) for d in self.duration_bins]
         self.velocity_tokens = ['NoteVelocity_'+str(v)for v in self.velocity_bins]
         self.program_tokens = ['NoteInstrument_'+str(inst) for inst in INSTRUMENT_PROGRAMS]
-        self.inst_family_tokens = ['NoteInstrumentFamily_'+str(inst) for inst in INSTRUMENT_FAMILIES]
-        self.remi_tokens =  self.special_tokens + self.position_tokens + self.tempo_tokens +\
-            self.chord_tokens + self.pitch_tokens + self.duration_tokens + self.velocity_tokens
-        self.remi_tokens_with_program = self.remi_tokens + self.program_tokens
-        self.remi_tokens_with_inst_family = self.remi_tokens + self.inst_family_tokens
+        self.all_tokens =  self.special_tokens + self.position_tokens + self.tempo_tokens +\
+            self.chord_tokens + self.pitch_tokens + self.duration_tokens + self.velocity_tokens + self.program_tokens
         
 
     def update_resolution(self, tick_resol):
@@ -97,3 +92,10 @@ class Constants:
                             self.num_tempo_bins == o.num_tempo_bins and \
                                 self.num_velocity_bins == o.num_velocity_bins
         return False
+
+    def encode(self, tokens : List):
+        return [self.all_tokens.index(tok) for tok in tokens]
+
+    def decode(self, indices : List):
+        return [self.all_tokens[idx] for idx in indices]
+
