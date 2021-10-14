@@ -1,18 +1,107 @@
-from operator import pos
-from typing import List, Dict
-import numpy as np
-
-from .const import Constants, CHORDS
+from typing import List
+from .conf import CHORDS
 
 
 class MusicEvent:
-
     """
-    *** extended compund word representation ***
         bar : 0~...
         beat: 0~len(beats)-1  (0 = stating of a bar) 
-        tempo : 0~len(tempo_bins)  (0 = IGNORE, 1,... show index of value in tempo bins)
-        chord : 0~132 (0 = IGNORE, 1 to 132 show index of name in chords)
+    """
+    def __init__(self, bar : int = 0, beat : int = 0):
+        self.bar = bar
+        self.beat = beat
+
+    def set_metric_attributes(self, bar : int = None, beat : int = None):
+        if bar is not None:
+            self.bar = bar
+        if beat is not None:
+            self.beat = beat
+
+    def __eq__(self, o: object):
+        if isinstance(o, MusicEvent):
+            return self.bar == o.bar and self.beat == o.beat
+
+    def to_tokens(self):
+        return ['Beat' + str(self.beat)]
+
+
+class TempoEvent(MusicEvent):
+    """
+        tempo : 0~len(tempo_bins)-1  (index of value in tempo bins)
+    """
+    def __init__(self, bar : int = 0, beat : int = 0, tempo : int = 0):
+        super().__init__(bar, beat)
+        self.set_tempo(tempo)
+
+    @staticmethod
+    def from_tokens(tokens : List[str], bar : int):
+        assert tokens[0].startswith('Beat')
+        assert tokens[1].startswith('Tempo')
+        beat = int(tokens[0][5:])
+        tempo = int(tokens[1][6:])
+        return TempoEvent(bar, beat, tempo)
+
+    def __eq__(self, o: object):
+        if isinstance(o, TempoEvent):
+            return super().__eq__(o) and self.tempo == o.tempo
+
+    def __repr__(self):
+        return f'TempoEvent(bar={self.bar}, beat={self.beat}, tempo={self.tempo})'
+
+    def __hash__(self):
+        return hash((self.bar, self.beat, self.tempo))
+
+    def set_tempo(self, tempo : int = 0):
+        self.tempo = tempo
+
+    def to_tokens(self, include_metrics=False):
+        res = []
+        if include_metrics:
+            res += [super().to_token()] 
+        res += ['Tempo' + str(self.tempo)]
+        return res
+
+
+class ChordEvent(MusicEvent):
+    def __init__(self, bar : int = 0, beat : int = 0, chord : int = 0):
+        super().__init__(bar, beat)
+        self.set_chord(chord)
+    
+    @staticmethod
+    def from_tokens(tokens : List[str], bar : int):
+        assert tokens[0].startswith('Beat')
+        assert tokens[1].startswith('Chord')
+        beat = int(tokens[0][5:])
+        chord = int(tokens[1][6:])
+        return ChordEvent(bar, beat, chord)
+
+    def __eq__(self, o: object):
+        if isinstance(o, TempoEvent):
+            return super().__eq__(o) and self.chord == o.chord
+
+    def __repr__(self):
+        return f'ChordEvent(bar={self.bar}, beat={self.beat}, chord={self.chord_name})'
+
+    def __hash__(self):
+        return hash((self.bar, self.beat, self.chord))
+
+    def set_chord(self, chord : int = 0):
+        self.chord = chord
+        self.chord_name =  CHORDS[self.chord - 1]
+
+    def to_tokens(self, include_metrics=False):
+        res = []
+        if include_metrics:
+            res += [super(ChordEvent, self).to_token()]
+        res += ['Chord' + str(self.chord)]
+        return res
+        
+
+class NoteEvent(MusicEvent):
+
+    """
+        bar : 0~...
+        beat: 0~len(beats)-1  (0 = stating of a bar) 
         note_pitch : 0~128 (0 = IGNORE, 1 to 128 show midi pitch + 1)
         note_duration : 0~len(beats)-1 (0 = IGNORE, 1,... show duration in number of subbeats)
         note_velocity : 0~len(velocity_bins) (0 = IGNORE, 1,... show index of the value in velocity bins)
@@ -21,137 +110,68 @@ class MusicEvent:
     def __init__(self,
         bar : int = 0, 
         beat : int = 0, 
-        tempo : int = 0, 
-        chord : int = 0,
-        note_pitch : int = 0,
-        note_duration : int = 0,
-        note_velocity : int = 0, 
-        const : Constants = None):
+        pitch : int = 0,
+        duration : int = 0,
+        velocity : int = 0):
 
-        self.const = Constants() if const is None else const
-        assert 0 <= bar
-        assert 0 <= beat < self.const.n_bar_steps
-        assert 0 <= tempo < self.const.num_velocity_bins
-        assert 0 <= chord < len(CHORDS)
-        assert 0 <= note_pitch < 128
-        assert 0 <= note_duration < self.const.n_bar_steps
-        assert 0 <= note_velocity < self.const.num_velocity_bins
-
-        self.bar = bar
-        self.beat = beat
-        self.tempo = tempo
-        self.chord = chord
-        self.note_pitch = note_pitch
-        self.note_duration = note_duration
-        self.note_velocity = note_velocity
+        super().__init__(bar, beat)
+        self.note_pitch = pitch
+        self.note_duration = duration
+        self.note_velocity = velocity
 
     @staticmethod
-    def from_tuple(cp, const : Constants = None):
-        return MusicEvent(*cp, const=const)
+    def from_tuple(cp):
+        return NoteEvent(*cp)
 
     @staticmethod
-    def from_tokens(tokens : List, bar : int, const : Constants = None):
-        beat = int(tokens[0][4:]) if tokens[1].startswith('Beat') else 0
-        values = [0 for _ in range(5)]
-        idx = 1
-        for i, attr in enumerate(['Tempo', 'Chord', 'NotePitch', 'NoteDuration', 'NoteVelocity']):
-            if idx >= len(tokens):
-                break
-            if tokens[idx].startswith(attr):
-                values[i] = int(tokens[idx][len(attr):]) + 1 ## indices start from 1 (0 = ignore)
-                idx += 1
-            else:
-                values[i] = 0
-        return MusicEvent(bar, beat, *values)
+    def from_tokens(tokens : List, bar : int):
+        assert tokens[0].startswith('Beat')
+        beat = int(tokens[0][4:])
+        values = []
+        for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_', 'NoteVelocity_']):
+            assert tokens[idx+1].startswith(prefix)
+            values += [int(tokens[idx+1][len(prefix):]) + 1] ## indices start from 1 (0 = ignore)
+        return NoteEvent(bar, beat, *values)
 
-    def set_metric_attributes(self, bar : int = None, beat : int = None, tempo : int = None, chord : int = None):
-        if bar is not None:
-            self.bar = bar
-        if beat is not None:
-            self.beat = beat
-        if tempo is None:
-            self.tempo = tempo
-        if chord is not None:
-            self.chord = chord
+    def set_attributes(self, pitch : int = None, duration : int = None, velocity : int = None):
+        if pitch is not None:
+            self.pitch = pitch
+        if duration is not None:
+            self.duration = duration
+        if velocity is not None:
+            self.velocity = velocity
 
-    def set_note_attributes(self, note_pitch, note_duration, note_velocity):
-        self.note_pitch = note_pitch
-        self.note_duration = note_duration
-        self.note_velocity = note_velocity
-
-    def change_const(self, const: Constants):
-        if const is not None and self.const != const:
-            self.beat = int(np.round(self.beat * const.n_bar_steps / self.const.n_bar_steps))
-            if self.tempo > 0:
-                self.tempo = np.argmin(np.abs(const.tempo_bins - self.const.tempo_bins[self.tempo]))
-            self.note_duration = int(np.round(self.note_duration * const.n_bar_steps / self.const.n_bar_steps))
-            if self.note_velocity > 0:
-                self.note_velocity = np.argmin(np.abs(const.velocity_bins - self.const.velocity_bins[self.note_velocity]))
-            self.const = const
-
-    def __repr__(self, pretty=False):
+    def __repr__(self):
         prop = [f'bar={self.bar}, beat={self.beat}']
-        if self.tempo:
-            prop += [f'tempo={self.get_actual_tempo() if pretty else self.tempo}']
-        if self.chord:
-            prop += [f'chord={self.get_actual_chord() if pretty else self.chord}']
         if self.note_pitch:
-            prop += [f'note_pitch={self.note_pitch}']
+            prop += [f'pitch={self.pitch}']
         if self.note_duration:
-            prop += [f'note_duration={self.note_duration}']
+            prop += [f'duration={self.duration}']
         if self.note_velocity:
-            prop += [f'note_velocity={self.get_actual_velocity() if pretty else self.note_velocity}'] 
-        return f"MusicEvent({', '.join(prop)})"
+            prop += [f'velocity={self.velocity}'] 
+        return f"NoteEvent({', '.join(prop)})"
 
     def __eq__(self, other):
         if isinstance(other, MusicEvent):
-            return self.bar == other.bar and\
-                self.beat == other.beat and\
-                    self.tempo == other.tempo and\
-                        self.chord == other.chord and\
-                            self.note_pitch == other.note_pitch and\
-                                self.note_duration == other.note_duration and\
-                                    self.note_velocity == other.note_velocity
+            return super(NoteEvent, self).__eq__(other) and\
+                self.pitch == other.pitch and\
+                    self.duration == other.duration and\
+                        self.velocity == other.velocity
         return False
 
     def __hash__(self):
-        return hash((self.bar, self.beat, self.tempo, self.chord, self.note_pitch, self.note_duration, self.note_velocity))
-
-    def get_position_in_ticks(self):
-        return self.beat*self.const.step + self.bar*self.const.bar_resol
-
-    def get_actual_tempo(self):
-        return self.const.tempo_bins[self.tempo - 1] if self.tempo else None
-
-    def get_actual_chord(self):
-        return CHORDS[self.chord - 1] if self.chord else None
-
-    def get_duration_in_ticks(self):
-        return self.duration*self.const.step
-
-    def get_actual_velocity(self):
-        return self.const.velocity_bins[self.note_velocity - 1]
+        return hash((self.bar, self.beat, self.pitch, self.duration, self.velocity))
 
     def to_tuple(self):
-        return [self.bar, self.beat, self.tempo, self.chord, self.note_pitch, self.note_duration, self.note_velocity]
+        return [self.bar, self.beat, self.pitch, self.duration, self.velocity]
 
-    def to_tokens(self):
+    def to_tokens(self, include_metrics=False):
         res = []
-        if self.beat > 0:
-            res += ['Beat' + str(self.beat)]
-        else:
-            res += ['Bar']
-        if self.tempo > 0:
-            res += ['Tempo'+str(self.tempo)]
-        if self.chord > 0:
-            res += ['Chord' + str(self.chord)]
-        if self.note_pitch > 0:
-            res += [
-                'NotePitch' + str(self.note_pitch - 1), ## indices start from 1
-                'NoteDuration' + str(self.note_duration - 1),
-                'NoteVelocity' + str(self.note_velocity - 1)
-            ]
+        if include_metrics:
+            res += [super().to_token()]
+        res += [
+            'NotePitch' + str(self.pitch), 
+            'NoteDuration' + str(self.duration - 1), ## duration starts from 1
+            'NoteVelocity' + str(self.velocity)
+        ]
         return res
-    
-    def is_empty(self):
-        return self.note_pitch == 0

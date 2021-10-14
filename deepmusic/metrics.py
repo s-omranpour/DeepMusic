@@ -1,4 +1,3 @@
-from deepnote.modules import Metric, Note
 import numpy as np
 from scipy.stats import entropy
 import itertools
@@ -93,7 +92,6 @@ def chord_progression_irregularity(seq : Music, ngram=3, ret_unique_ngrams=False
     if ret_unique_ngrams:
         return res, unique_set
     return res
-
 
 def structuredness_indicator(seq : Music): 
     raise NotImplementedError

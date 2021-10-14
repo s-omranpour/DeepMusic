@@ -2,6 +2,8 @@ from typing import List
 import numpy as np
 import itertools
 
+from deepmusic.event import NoteEvent
+
 PITCHES = np.arange(0, 128)
 PIRCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 CHORD_QUALITIES = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
@@ -27,7 +29,7 @@ INSTRUMENT_FAMILIES = [
     'drums'
 ]
 
-class Constants:
+class MusicConfig:
     def __init__(
         self, 
         unit=12, 
@@ -47,7 +49,7 @@ class Constants:
         self.bar_resol = 4*tick_resol
 
         ## position
-        self.position_bins = np.arange(1, 4*unit)
+        self.position_bins = np.arange(0, 4*unit)
 
         ## tempo
         self.min_tempo = min_tempo
@@ -64,7 +66,7 @@ class Constants:
 
         ## tokens
         self.special_tokens = ['BOS', 'EOS', 'MASK']
-        self.position_tokens = ['Bar'] + ['BeatPosition_'+str(p) for p in self.position_bins]
+        self.position_tokens = ['Bar'] + ['Beat_'+str(p) for p in self.position_bins]
         self.tempo_tokens = ['Tempo_'+str(t) for t in self.tempo_bins]
         self.chord_tokens = ['Chord_'+str(c) for c in CHORDS]
         self.pitch_tokens = ['NotePitch_'+str(i) for i in PITCHES]
@@ -73,7 +75,6 @@ class Constants:
         self.program_tokens = ['NoteInstrument_'+str(inst) for inst in INSTRUMENT_PROGRAMS]
         self.all_tokens =  self.special_tokens + self.position_tokens + self.tempo_tokens +\
             self.chord_tokens + self.pitch_tokens + self.duration_tokens + self.velocity_tokens + self.program_tokens
-        
 
     def update_resolution(self, tick_resol):
         self.tick_resol = tick_resol
@@ -81,10 +82,10 @@ class Constants:
         self.bar_resol = 4*tick_resol
 
     def __repr__(self):
-        return f'Constants(unit={self.unit}, tick_resol={self.tick_resol}, min_tempo={self.min_tempo}, max_tempo={self.max_tempo}, num_tempo_bins={self.num_tempo_bins}, num_velocity_bins={self.num_velocity_bins})'
+        return f'MusicConfig(unit={self.unit}, tick_resol={self.tick_resol}, min_tempo={self.min_tempo}, max_tempo={self.max_tempo}, num_tempo_bins={self.num_tempo_bins}, num_velocity_bins={self.num_velocity_bins})'
 
     def __eq__(self, o: object):
-        if isinstance(o, Constants):
+        if isinstance(o, MusicConfig):
             return self.unit == o.unit and\
                 self.tick_resol == o.tick_resol and \
                     self.min_tempo == o.min_tempo and \
@@ -98,4 +99,3 @@ class Constants:
 
     def decode(self, indices : List):
         return [self.all_tokens[idx] for idx in indices]
-

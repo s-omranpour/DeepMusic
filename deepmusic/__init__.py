@@ -1,2 +1,3 @@
-from deepmusic.modules import Constants, Note, Metric, utils
-from deepmusic.repr import MusicRepr
+from .const import Constants
+from .container import Track, Music
+from .event import MusicEvent
