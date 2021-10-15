@@ -2,12 +2,10 @@ from typing import List
 import numpy as np
 import itertools
 
-from deepmusic.event import NoteEvent
-
 PITCHES = np.arange(0, 128)
-PIRCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+PITCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 CHORD_QUALITIES = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
-CHORDS = ['_'.join(e) for e in itertools.product(PIRCH_CLASSES, CHORD_QUALITIES)]
+CHORDS = ['_'.join(e) for e in itertools.product(PITCH_CLASSES, CHORD_QUALITIES)]
 INSTRUMENT_PROGRAMS = np.arange(0, 256)
 INSTRUMENT_FAMILIES = [
     'piano',
@@ -58,7 +56,7 @@ class MusicConfig:
         self.tempo_bins = np.linspace(min_tempo, max_tempo, num_tempo_bins, dtype=int)
 
         ## duration
-        self.duration_bins = np.arange(1, 4*unit+1)
+        self.duration_bins = np.arange(0, 4*unit)
 
         ## velocity
         self.num_velocity_bins = num_velocity_bins
@@ -83,6 +81,9 @@ class MusicConfig:
 
     def __repr__(self):
         return f'MusicConfig(unit={self.unit}, tick_resol={self.tick_resol}, min_tempo={self.min_tempo}, max_tempo={self.max_tempo}, num_tempo_bins={self.num_tempo_bins}, num_velocity_bins={self.num_velocity_bins})'
+
+    def __hash__(self):
+        return hash((self.unit, self.tick_resol, self.min_tempo, self.max_tempo, self.num_tempo_bins, self.num_velocity_bins))
 
     def __eq__(self, o: object):
         if isinstance(o, MusicConfig):

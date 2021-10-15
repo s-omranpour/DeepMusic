@@ -102,9 +102,9 @@ class NoteEvent(MusicEvent):
     """
         bar : 0~...
         beat: 0~len(beats)-1  (0 = stating of a bar) 
-        note_pitch : 0~128 (0 = IGNORE, 1 to 128 show midi pitch + 1)
-        note_duration : 0~len(beats)-1 (0 = IGNORE, 1,... show duration in number of subbeats)
-        note_velocity : 0~len(velocity_bins) (0 = IGNORE, 1,... show index of the value in velocity bins)
+        pitch : 0~128 (0 to 127 show midi pitch )
+        duration : 0~len(beats)-1 (0,... show duration in number of subbeats - 1)
+        velocity : 0~len(velocity_bins)-1 (0,... show index of the value in velocity bins)
     """
 
     def __init__(self,
@@ -115,9 +115,9 @@ class NoteEvent(MusicEvent):
         velocity : int = 0):
 
         super().__init__(bar, beat)
-        self.note_pitch = pitch
-        self.note_duration = duration
-        self.note_velocity = velocity
+        self.pitch = pitch
+        self.duration = duration
+        self.velocity = velocity
 
     @staticmethod
     def from_tuple(cp):
@@ -130,7 +130,7 @@ class NoteEvent(MusicEvent):
         values = []
         for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_', 'NoteVelocity_']):
             assert tokens[idx+1].startswith(prefix)
-            values += [int(tokens[idx+1][len(prefix):]) + 1] ## indices start from 1 (0 = ignore)
+            values += [int(tokens[idx+1][len(prefix):])]
         return NoteEvent(bar, beat, *values)
 
     def set_attributes(self, pitch : int = None, duration : int = None, velocity : int = None):
@@ -143,11 +143,11 @@ class NoteEvent(MusicEvent):
 
     def __repr__(self):
         prop = [f'bar={self.bar}, beat={self.beat}']
-        if self.note_pitch:
+        if self.pitch:
             prop += [f'pitch={self.pitch}']
-        if self.note_duration:
+        if self.duration:
             prop += [f'duration={self.duration}']
-        if self.note_velocity:
+        if self.velocity:
             prop += [f'velocity={self.velocity}'] 
         return f"NoteEvent({', '.join(prop)})"
 
@@ -171,7 +171,7 @@ class NoteEvent(MusicEvent):
             res += [super().to_token()]
         res += [
             'NotePitch' + str(self.pitch), 
-            'NoteDuration' + str(self.duration - 1), ## duration starts from 1
+            'NoteDuration' + str(self.duration),
             'NoteVelocity' + str(self.velocity)
         ]
         return res

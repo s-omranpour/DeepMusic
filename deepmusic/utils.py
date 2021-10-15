@@ -19,20 +19,25 @@ def validate_chord(config : MusicConfig, chord : ChordEvent):
 
 def validate_note(config : MusicConfig, note : NoteEvent):
     return (0 <= note.pitch < 128) and (0 < note.duration <= config.n_bar_steps) and (0 < note.velocity <= config.num_velocity_bins)
-    
+
+def update_metric_attributes_with_config(event : MusicEvent, new_config : MusicConfig, old_config : MusicConfig):
+    event = deepcopy(event)
+    beat = int(np.round(event.beat * new_config.n_bar_steps / old_config.n_bar_steps))
+    event.set_metric_attributes(beat=beat)
+    return event
+
 def update_note_with_config(note: NoteEvent, new_config : MusicConfig, old_config : MusicConfig):
-    beat = int(np.round(note.beat * new_config.n_bar_steps / old_config.n_bar_steps))
+    note = update_metric_attributes_with_config(note, new_config, old_config)
     duration = int(np.round(note.duration * new_config.n_bar_steps / old_config.n_bar_steps))
     velocity = np.argmin(np.abs(new_config.velocity_bins - old_config.velocity_bins[note.velocity]))
-    note.set_metric_attributes(beat=beat)
     note.set_attributes(duration=duration, velocity=velocity)
     return note
 
 def sort_events(events : List[MusicEvent]):
     return sorted(events, key=lambda x: (x.bar, x.beat))
 
-def sort_and_remove_identical_notes(notes : List[NoteEvent]):
-    return sort_events(set(notes))
+def sort_and_remove_identical_events(events : List[MusicEvent]):
+    return sort_events(set(events))
 
 def remove_duplicate_beats_from_tokens(tokens : List):
     res = []
@@ -61,7 +66,7 @@ def organize_events_by_attr(events : List[MusicEvent], attrs):
             val = val[0]
         if val not in res:
             res[val] = []
-        res[val] += [e]
+        res[val] += [deepcopy(e)]
     return res
 
 
