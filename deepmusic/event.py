@@ -1,5 +1,6 @@
 from typing import List
-from .conf import CHORDS
+import numpy as np
+from .conf import CHORDS, MusicConfig
 
 
 class MusicEvent:
@@ -23,6 +24,10 @@ class MusicEvent:
 
     def to_tokens(self):
         return ['Beat' + str(self.beat)]
+
+    def update_metric_attributes_with_config(self, new_config : MusicConfig, old_config : MusicConfig):
+        beat = int(np.round(self.beat * new_config.n_bar_steps / old_config.n_bar_steps))
+        self.beat = beat
 
 
 class TempoEvent(MusicEvent):
@@ -76,7 +81,7 @@ class ChordEvent(MusicEvent):
         return ChordEvent(bar, beat, chord)
 
     def __eq__(self, o: object):
-        if isinstance(o, TempoEvent):
+        if isinstance(o, ChordEvent):
             return super().__eq__(o) and self.chord == o.chord
 
     def __repr__(self):
@@ -175,3 +180,10 @@ class NoteEvent(MusicEvent):
             'NoteVelocity' + str(self.velocity)
         ]
         return res
+
+    def update_note_with_config(self, new_config : MusicConfig, old_config : MusicConfig):
+        self.update_metric_attributes_with_config(new_config, old_config)
+        duration = int(np.round(self.duration * new_config.n_bar_steps / old_config.n_bar_steps))
+        velocity = np.argmin(np.abs(new_config.velocity_bins - old_config.velocity_bins[self.velocity]))
+        self.duration = duration
+        self.velocity = velocity

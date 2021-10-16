@@ -156,18 +156,18 @@ class Music:
         config = configs[0]
 
         tracks = utils.flatten([m.get_tracks() for m in musics])
-        tempos = utils.sort_and_remove_identical_events(utils.flatten([m.tempos for m in musics]))
-        chords = utils.sort_and_remove_identical_events(utils.flatten([m.chords for m in musics]))
-        res = Music(tracks, tempos, chords, config, name='Merged from '+', '.join([m.name for m in musics]))
+        tempos = utils.sort_and_remove_identical_events(utils.flatten([m.get_tempos() for m in musics]))
+        chords = utils.sort_and_remove_identical_events(utils.flatten([m.get_chords() for m in musics]))
+        res = Music(tracks, tempos, chords, config, name='Merged : '+', '.join([m.name for m in musics]))
         if merge_similar_programs:
-            programs = set([t.program for t in res.tracks])
-            for program in programs:
-                indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == program]
-                res.merge_tracks(indices)
-        return res      
+            ids = set([(t.program, t.name) for t in res.tracks])
+            for id in ids:
+                indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == id[0] and res.tracks[idx].name == id[1]]
+                res.merge_tracks(indices, name=id[1])
+        return res
 
     @staticmethod
-    def concatenate(musics : List, merge_similar_programs=True):
+    def concatenate(musics : List, merge_similar_tracks=True):
         """
             if merge == True:
                 merge tracks with same program and different names
@@ -175,41 +175,40 @@ class Music:
                 merge tracks with same program and name
         """
         assert len(musics) > 0, "Not enough musics to concatenate."
-        ## check for config consistency
         configs = list(set([m.config for m in musics]))
         assert len(configs) == 1, "Inconsistancy among inserted musics' configs."
         config = configs[0]
-
-        all_tracks = musics[0].get_tracks()
-        tempos = musics[0].tempos
-        chords = musics[0].chords
-        n_bar = musics[0].get_bar_count()
-        for music in musics[1:]:
-            music.pad_left(n_bar)
-            n_bar += music.get_bar_count()
-            all_tracks += music.get_tracks()
-            tempos += music.tempos()
-            chords += music.chords()
-        tempos = utils.sort_and_remove_identical_events(utils.flatten([m.tempos for m in musics]))
-        chords = utils.sort_and_remove_identical_events(utils.flatten([m.chords for m in musics]))
-        res = Music(all_tracks, tempos, chords, config, name='Concatented from '+', '.join([m.name for m in musics]))
-        if merge_similar_programs:
-            programs = set([t.program for t in res.tracks])
-            for program in programs:
-                indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == program]
-                res.merge_tracks(indices)
+        all_tracks = []
+        tempos = []
+        chords = []
+        n_prev_bars = 0
+        for music in musics:
+            m = deepcopy(music)
+            m.pad_left(n_prev_bars)
+            n_prev_bars = m.get_bar_count()
+            all_tracks += m.get_tracks()
+            tempos += m.get_tempos()
+            chords += m.get_chords()
+            
+            
+        tempos = utils.sort_and_remove_identical_events(tempos)
+        chords = utils.sort_and_remove_identical_events(chords)
+        res = Music(all_tracks, tempos, chords, config, name='Concatented : '+', '.join([m.name for m in musics]))
+        if merge_similar_tracks:
+            ids = set([(t.program, t.name) for t in res.tracks])
+            for id in ids:
+                indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == id[0] and res.tracks[idx].name == id[1]]
+                res.merge_tracks(indices, name=id[1])
         return res
 
     def change_config(self, config : MusicConfig):
         for t in self.tracks:
             t.change_config(config)
-
-        for idx,tempo in enumerate(self.tempos):
+        for tempo in self.tempos:
             tempo.tempo = np.argmin(np.abs(config.tempo_bins - self.config.tempo_bins[tempo.tempo]))
-            self.tempos[idx] = utils.update_metric_attributes_with_config(tempo, config, self.config)
-
-        for idx,chord in enumerate(self.chords):
-            self.chords[idx] = utils.update_metric_attributes_with_config(chord, config, self.config)
+            tempo.update_metric_attributes_with_config(config, self.config)
+        for chord in self.chords:
+            chord.update_metric_attributes_with_config(config, self.config)
         self.config = config
 
     def clean(self):
@@ -243,9 +242,10 @@ class Music:
                 res += [t]
         self.tracks = res
 
-    def merge_tracks(self, indices):
-        self.tracks += [Track.merge_tracks([self.tracks[idx] for idx in indices])]
-        self.remove_tracks(indices=indices)
+    def merge_tracks(self, indices : List, name : str = None):
+        super_track = Track.merge_tracks([self.tracks[idx] for idx in indices], name=name)
+        self.remove_tracks(indices=indices, inplace=True)
+        self.tracks += [super_track]
 
     def pad_left(self, n : int):
         for track in self.tracks:
@@ -255,106 +255,139 @@ class Music:
         for chord in self.chords:
             chord.set_metric_attributes(bar=chord.bar + n)
 
-    def remove_starting_silent_bars(self):
+    def remove_starting_silent_bars(self, inplace : bool = False):
         min_bars = [t.notes[0].bar for t in self.tracks]
         if len(self.tempos):
             min_bars += [self.tempos[0].bar]
         if len(self.chords):
             min_bars += [self.chords[0].bar]
-        offset = min(min_bars)
-        for t in self.tracks:
+        offset = min(min_bars) if len(min_bars) else 0
+        tracks = self.get_tracks()
+        for t in tracks:
             for note in t.notes:
                 note.set_metric_attributes(bar=note.bar - offset)
-        for t in self.tempos:
+        tempos = self.get_tempos()
+        for t in tempos:
             t.set_metric_attributes(bar=t.bar - offset)
-        for c in self.chords:
+        chords = self.get_chords()
+        for c in chords:
             c.set_metric_attributes(bar=c.bar - offset)
+        if inplace:
+            self.tracks = tracks
+            self.tempos = tempos
+            self.chords = chords
+            return 
+        return Music(tracks, tempos, chords, self.get_config(), self.name)
 
-    def remove_tracks(self, indices:List=None, programs:List=None, inst_families:List=None):
+    def remove_tracks(self, indices:List=None, programs:List=None, inst_families:List=None, inplace : bool = False):
+        tracks = self.get_tracks()
+        selected_tracks = []
         if indices is not None:
-            selected_tracks = [self.tracks[idx] for idx in indices]
-            for t in selected_tracks:
-                self.tracks.remove(t)
+            selected_tracks = [tracks[idx] for idx in indices]
         if programs is not None:
-            for t in self.tracks:
-                if t.program in programs:
-                    self.tracks.remove(t)
+            selected_tracks = [t for t in tracks if t.program in programs]
         if inst_families is not None:
-            for t in self.tracks:
-                if t.inst_family in inst_families:
-                    self.tracks.remove(t)
+            selected_tracks = [t for t in tracks if t.inst_family in inst_families]
+        for t in set(selected_tracks):
+            tracks.remove(t)
+        if inplace:
+            self.tracks = tracks
+            return
+        return Music(tracks, self.get_tempos(), self.get_chords(), self.get_config(), self.name)
 
-    def keep_tracks(self, indices:List=None, programs:List=None, inst_families:List=None):
-        tracks = []
+    def keep_tracks(self, indices:List=None, programs:List=None, inst_families:List=None, inplace : bool = False):
+        tracks = set()
         if indices is not None:
             for idx in indices:
-                tracks += [self.tracks[idx]]
-
+                tracks.update([self.tracks[idx]]) 
         if programs is not None:
             for t in self.tracks:
                 if t.program in programs:
-                    tracks += [t]
-
+                    tracks.update([t])
         if inst_families is not None:
             for t in self.tracks:
                 if t.inst_family in inst_families:
-                    tracks += [t]
-        self.tracks = tracks
+                    tracks.update([t])
+        if inplace:
+            self.tracks = tracks
+            return
+        return Music(list(tracks), self.get_tempos(), self.get_chords(), self.get_config(), self.name)
 
-    def find_beat_index(self, events, beat):
-        for i, e in enumerate(events):
-            if beat <= e.bar*self.config.n_bar_steps + e.beat:
+    def find_position_index(self, events : List, bar : int, beat : int):
+        for i, n in enumerate(events):
+            if n.bar >= bar and n.beat >= beat:
                 return i
         return -1
 
-    def slice_by_beat(self, start, end):
-        tracks = [t.slice_by_beat(start, end) for t in self.tracks]
+    def slice_by_beat(self, start : int, end : int, inplace : bool = False):
+        tracks = [t.slice_by_beat(start, end) for t in self.get_tracks()]
         tracks = list(filter(lambda x: not x.is_empty(), tracks))
 
-        s = self.find_beat_index(self.tempos, start)
-        e = self.find_beat_index(self.tempos, end + 1)
+        s = self.find_position_index(self.tempos, start // self.config.n_bar_steps, start % self.config.n_bar_steps)
+        e = self.find_position_index(self.tempos, end // self.config.n_bar_steps, end % self.config.n_bar_steps)
         if s == -1:
             tempos = []
         else:
-            tempos = self.tempos[s:]
+            tempos = self.get_tempos()[s:]
             if e > -1:
-                tempos = tempos[:e]
+                tempos = tempos[:e-s]
         
-        s = self.find_beat_index(self.chords, start)
-        e = self.find_beat_index(self.chords, end + 1)
+        s = self.find_position_index(self.chords, start // self.config.n_bar_steps, start % self.config.n_bar_steps)
+        e = self.find_position_index(self.chords, end // self.config.n_bar_steps, end % self.config.n_bar_steps)
         if s == -1:
             chords = []
         else:
-            chords = self.chords[s:]
+            chords = self.get_chords()[s:]
             if e > -1:
-                chords = chords[:e]
-        return Music(tracks, tempos, chords, self.config, name=self.name + f' - sliced from beat {start} to {end}')
+                chords = chords[:e-s]
+        if inplace:
+            self.tracks = tracks
+            self.tempos = tempos
+            self.chords = chords
+            self.remove_starting_silent_bars(inplace=True)
+            return
+        return Music(tracks, tempos, chords, self.get_config(), name=self.name).remove_starting_silent_bars()
 
-    def slice_by_bar(self, start : int, end : int):
-        tracks = [t.slice_by_bar(start, end) for t in self.tracks]
+    def slice_by_bar(self, start : int, end : int, inplace : bool = False):
+        tracks = [t.slice_by_bar(start, end) for t in self.get_tracks()]
         tracks = list(filter(lambda x: not x.is_empty(), tracks))
 
-        s = self.find_beat_index(self.tempos, start*self.config.n_bar_steps)
-        e = self.find_beat_index(self.tempos, (end + 1)*self.config.n_bar_steps)
+        s = self.find_position_index(self.tempos, start, 0)
+        e = self.find_position_index(self.tempos, end, 0)
         if s == -1:
             tempos = []
         else:
-            tempos = self.tempos[s:]
+            tempos = self.get_tempos()[s:]
             if e > -1:
-                tempos = tempos[:e]
+                tempos = tempos[:e-s]
         
-        s = self.find_beat_index(self.chords, start*self.config.n_bar_steps)
-        e = self.find_beat_index(self.chords, (end + 1)*self.config.n_bar_steps)
+        s = self.find_position_index(self.chords, start, 0)
+        e = self.find_position_index(self.chords, end, 0)
         if s == -1:
             chords = []
         else:
-            chords = self.chords[s:]
+            chords = self.get_chords()[s:]
             if e > -1:
-                chords = chords[:e]
-        return Music(tracks, tempos, chords, self.config, name=self.name + f' - sliced from bar {start} to {end}')
+                chords = chords[:e-s]
+        if inplace:
+            self.tracks = tracks
+            self.tempos = tempos
+            self.chords = chords
+            self.remove_starting_silent_bars(inplace=True)
+            return
+        return Music(tracks, tempos, chords, self.config, name=self.name).remove_starting_silent_bars()
 
     def get_tracks(self):
         return deepcopy(self.tracks)
+
+    def get_tempos(self):
+        return deepcopy(self.tempos)
+
+    def get_chords(self):
+        return deepcopy(self.chords)
+
+    def get_config(self):
+        return deepcopy(self.config)
 
     def get_bars(self):
         bars = [t.get_bars() for t in self.get_tracks()]
@@ -377,8 +410,7 @@ class Music:
                     chords=res[i]['chords'],
                     config=self.config,
                     name=self.name + ' - Bar No. '+str(i)
-                )
-                res[i].remove_starting_silent_bars()
+                ).remove_starting_silent_bars()
             else:
                 del res[i]
         return res
@@ -386,9 +418,9 @@ class Music:
     def get_bar_count(self):
         n_bars = [t.get_bar_count() for t in self.tracks]
         if len(self.tempos):
-            n_bars += [self.tempos[-1].bar]
+            n_bars += [self.tempos[-1].bar + 1]
         if len(self.chords):
-            n_bars += [self.chords[-1].bar]
+            n_bars += [self.chords[-1].bar + 1]
         return max(n_bars)
 
     def get_num_notes(self):
@@ -397,43 +429,45 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, return_indices=True, add_eos=False):
+    def to_tokens(self, add_tempo_chord=True, return_indices=False, add_eos=False):
         res = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
             res += ['Bar']
-            for beat in range(self.const.n_bar_steps):
-                if (bar_idx,beat) in tempos:
-                    res += ['Beat'+str(beat), 'Tempo'+str(tempos[(bar_idx, beat)][-1].tempo)]
-                if (bar_idx,beat) in chords:
-                    res += ['Beat'+str(beat), 'Chord'+str(chords[(bar_idx, beat)][-1].chord)]
+            for beat in range(self.config.n_bar_steps):
+                if add_tempo_chord:
+                    if (bar_idx,beat) in tempos:
+                        res += ['Beat'+str(beat), 'Tempo'+str(tempos[(bar_idx, beat)][-1].tempo)]
+                    if (bar_idx,beat) in chords:
+                        res += ['Beat'+str(beat), 'Chord'+str(chords[(bar_idx, beat)][-1].chord)]
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
-                        res += track[bar_idx][beat].to_tokens(add_instrument_token=True)[1:] ## each track starts with a bar
+                        res += track[bar_idx][beat].to_tokens(add_instrument_token=True)
         res = utils.remove_duplicate_beats_from_tokens(res)
         if add_eos:
-            res += [self.const.special_tokens[1]]
-        return self.const.encode(res) if return_indices else res
+            res += [self.config.special_tokens[1]]
+        return self.config.encode(res) if return_indices else res
 
-    def to_tuples(self):
+    def to_tuples(self, add_tempo_chord=True):
         res = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
-            for beat in range(self.const.n_bar_steps):
-                res += [[bar_idx, beat] + [0]*6]
+            for beat in range(self.config.n_bar_steps):
                 has_tempo_or_chord = False
-                if (bar_idx, beat) in tempos:
-                    has_tempo_or_chord = True
-                    res[-1][2] = tempos[(bar_idx, beat)].tempo + 1 ## in tuples 0 = ignore
-                if (bar_idx, beat) in chords:
-                    has_tempo_or_chord = True
-                    res[-1][3] = chords[(bar_idx, beat)].chord + 1
-                if not has_tempo_or_chord:
-                    res = res[:-1] ## remove last tuple if there was no tempos or chords
+                if add_tempo_chord:
+                    res += [[bar_idx, beat] + [0]*6]
+                    if (bar_idx, beat) in tempos:
+                        has_tempo_or_chord = True
+                        res[-1][2] = tempos[(bar_idx, beat)].tempo + 1 ## in tuples 0 = ignore
+                    if (bar_idx, beat) in chords:
+                        has_tempo_or_chord = True
+                        res[-1][3] = chords[(bar_idx, beat)].chord + 1
+                    if not has_tempo_or_chord:
+                        res = res[:-1] ## remove last tuple if there was no tempos or chords
                 has_notes = False
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
@@ -443,18 +477,18 @@ class Music:
                     res += [[bar_idx, beat] + [0]*6]
         return np.array(res)
 
-    def to_pianoroll(self, binarize=False, add_tempo_chord=False):
+    def to_pianoroll(self, binarize=False):
         return dict(
             zip(
-                [t.program for t in self.tracks],
-                [t.to_pianoroll(binarize=binarize, add_tempo_chord=add_tempo_chord) for t in self.tracks]
+                [(t.program, t.name) for t in self.tracks],
+                [t.to_pianoroll(binarize=binarize) for t in self.tracks]
             )
         )
 
     def to_midi(self, output_path : str = None):
         instruments, max_ticks = list(zip(*[t.to_midi_instrument() for t in self.tracks]))
         midi = MidiFile()
-        midi.ticks_per_beat = self.const.tick_resol
+        midi.ticks_per_beat = self.config.tick_resol
         midi.instruments = instruments
         midi.max_tick = max(max_ticks)
         
@@ -480,16 +514,32 @@ class Music:
         os.remove('test.mid')
 
     def __repr__(self):
-        tracks ='\n    '.join([str(t) for t in self.tracks])
-        return f"Music(\n  name={self.name},\n  tracks=[\n    {tracks}\n  ]\n)"
+        str_tracks ='\n    '.join([str(t) for t in self.tracks])
+        if str_tracks:
+            str_tracks = '\n    ' + str_tracks + '\n  '
+        str_tempos = ''
+        if len(self.tempos):
+            str_tempos = '\n    ' + str(self.tempos[0]) + '\n  '
+            if len(self.tempos) > 1:
+                str_tempos += '  ...\n  '
+
+        str_chords = ''
+        if len(self.chords):
+            str_chords = '\n    ' + str(self.chords[0])
+            if len(self.chords) > 1:
+                str_chords += '\n    ...\n  '
+        return f"Music(\n  name={self.name}, \n  bars={self.get_bar_count()},\n  tracks=[{str_tracks}],\n  tempos=[{str_tempos}],\n  chords=[{str_chords}]\n)"
 
     def __hash__(self):
         return hash((self.config, *self.tempos, *self.chords, *self.tracks))
 
     def __eq__(self, o: object):
         if isinstance(o, Music):
-            return self.config == o.config and set(self.tempos) == set(o.tempos) and set(self.chords) == set(o.chords) and set(self.tracks) == set(self.tracks)
-
+            return self.config == o.config and\
+                set(self.tempos) == set(o.tempos) and\
+                    set(self.chords) == set(o.chords) and\
+                        len(self.tracks) == len(o.tracks) and\
+                            all([(t in o.tracks) for t in self.tracks])
 
 class Track:
     def __init__(self, program : int, notes: List, config : MusicConfig = None, name: str = ''):
@@ -549,28 +599,30 @@ class Track:
         return Track(program, utils.flatten([poses[t] for t in sorted(poses)], config, name))
 
     @staticmethod
-    def merge_tracks(tracks : List):
+    def merge_tracks(tracks : List, name : str = None):
         configs = list(set([t.get_config() for t in tracks]))
         assert len(configs) == 1, "Inconsistent MusicConfig among tracks."
         config = configs[0]
         program = Counter([t.program for t in tracks]).most_common(1)[0][0]
-        name = 'Merged :' + ', '.join([t.name for t in tracks])
+        if name is None:
+            name = 'Merged :' + ', '.join([t.name for t in tracks])
         return Track(program, utils.flatten([t.get_notes() for t in tracks]), config, name)
                 
     @staticmethod
-    def concatente(tracks: List):
+    def concatente(tracks: List, name : str = None):
         configs = list(set([t.get_config() for t in tracks]))
         assert len(configs) == 1, "Inconsistent MusicConfig among tracks."
         
         config = configs[0]
         program = Counter([t.program for t in tracks]).most_common(1)[0][0]
-        name = 'Concatenated :' + ', '.join([t.name for t in tracks])
-        n_prev_bars = [0] + [t.get_bar_count() for t in tracks[:-1]]
+        if name is None:
+            name = 'Concatenated :' + ', '.join([t.name for t in tracks])
+        n_prev_bars = 0
         notes = []
-        for nb, track in zip(n_prev_bars ,tracks):
-            t = deepcopy(track)
-            t.pad_left(nb)
+        for track in tracks:
+            t = track.pad_left(n_prev_bars)
             notes += t.get_notes()
+            n_prev_bars = t.get_bar_count()
         return Track(program, notes, config, name)
 
     def add_notes(self, notes : List):
@@ -605,54 +657,73 @@ class Track:
             return
         logging.warn('Config unchanged.')
 
-    def pad_left(self, n : int = 0):
+    def pad_left(self, n : int = 0, inplace : bool = False):
+        notes = self.get_notes()
         if n > 0:
-            for note in self.notes:
+            for note in notes:
                 note.set_metric_attributes(bar=note.bar + n)
-        return bool(n)
+        if inplace:
+            self.notes = notes
+            return
+        return Track(self.program, notes, self.get_config(), self.name)
 
-    def find_beat_index(self, beat : int):
+    def find_position_index(self, bar : int, beat : int):
         for i, n in enumerate(self.notes):
-            if beat <= n.bar*self.config.n_bar_steps + n.beat:
+            if n.bar >= bar and n.beat >= beat:
                 return i
         return -1
 
-    def slice_by_index(self, start : int, end : int):
-        return Track(self.program, self.notes[start:end], config=self.config, name=self.name + f' - sliced from index {start} to {end}')
+    def slice_by_index(self, start : int, end : int, inplace : bool = False):
+        if inplace:
+            self.notes = self.notes[start:end]
+            return
+        return Track(self.program, self.get_notes()[start:end], config=self.config, name=self.name)
 
-    def slice_by_beat(self, start : int, end : int):
-        s = self.find_beat_index(start)
-        e = self.find_beat_index(end + 1)
+    def slice_by_beat(self, start : int, end : int, inplace : bool = False):
+        s = self.find_position_index(start // self.config.n_bar_steps, start % self.config.n_bar_steps)
+        e = self.find_position_index(end // self.config.n_bar_steps, end % self.config.n_bar_steps)
         if s == -1:
             notes = []
         else:
-            notes = self.notes[s:]
+            notes = self.get_notes()[s:]
             if e > -1:
-                notes = notes[:e] 
-        return Track(self.program, notes, config=self.config, name=self.name + f' - sliced from beat {start} to {end}')
+                notes = notes[:e-s] 
+        if inplace:
+            self.notes = notes
+            return
+        return Track(self.program, notes, config=self.get_config(), name=self.name)
 
-    def slice_by_bar(self, start : int, end : int):
-        s = self.find_beat_index(start*self.config.n_bar_steps)
-        e = self.find_beat_index((end + 1)*self.config.n_bar_steps)
+    def slice_by_bar(self, start : int, end : int, inplace : bool = False):
+        s = self.find_position_index(start, 0)
+        e = self.find_position_index(end, 0)
         if s == -1:
             notes = []
         else:
-            notes = self.notes[s:]
+            notes = self.get_notes()[s:]
             if e > -1:
-                notes = notes[:e] 
-        return Track(self.program, notes, config=self.config, name=self.name + f' - sliced from bar {start} to {end}')
+                notes = notes[:e-s] 
+        if inplace:
+            self.notes = notes
+            return 
+        return Track(self.program, notes, config=self.get_config(), name=self.name)
 
     def clean(self): 
         # 1. remove identical notes 
+        # 2. remove invalid notes
         # 2. sort notes
         self.notes = utils.sort_and_remove_identical_events(self.notes)
+        res = []
+        for n in self.notes:
+            if utils.validate_note(self.config, n):
+                res += [n]
+        self.notes = res
 
     def organize(self):
         res = utils.organize_events_by_attr(self.notes, ['bar'])
         for i in res:
-            res[i] = utils.organize_events_by_attr(res[i])
+            res[i] = utils.organize_events_by_attr(res[i], ['beat'])
             for j in res[i]:
-                res[i][j] = Track(self.program, res[i][j], self.config, f'Bar No. {i} - Beat No. {j}')
+                res[i][j] = Track(self.program, res[i][j], self.config, self.name)
         return res
 
     def get_bars(self):
@@ -660,7 +731,7 @@ class Track:
             return []
         res = utils.organize_events_by_attr(self.notes, ['bar'])
         for i in res:
-            res[i] = Track(self.program, res[i], config=self.config, name=self.name + ' - Bar No. ' + str(i))
+            res[i] = Track(self.program, res[i], config=self.config, name=self.name)
         return res
 
     def get_bar_count(self):
@@ -675,10 +746,7 @@ class Track:
         return deepcopy(self.notes)
 
     def get_config(self):
-        return self.config
-
-    def get_name(self):
-        return self.name
+        return deepcopy(self.config)
 
     def is_empty(self):
         return len(self.notes) == 0
@@ -702,7 +770,7 @@ class Track:
         max_tick = instrument.notes[-1].end
         return instrument, max_tick
 
-    def to_pianoroll(self, binarize=False, add_tempo_chord=True):
+    def to_pianoroll(self, binarize=False):
         roll = np.zeros(shape=(128, self.get_bar_count()*self.config.n_bar_steps))
         for note in self.notes:
             offset = note.bar*self.config.n_bar_steps + note.beat
@@ -733,7 +801,7 @@ class Track:
         return res
 
     def __repr__(self):
-        return f'Track(inst_family={self.inst_family}, program={self.program}, name={self.name})'
+        return f'Track(inst_family={self.inst_family}, program={self.program}, name={self.name}, notes={len(self.notes)}, bars={self.get_bar_count()})'
     
     def __len__(self):
         return len(self.notes)
