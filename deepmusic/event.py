@@ -23,7 +23,7 @@ class MusicEvent:
             return self.bar == o.bar and self.beat == o.beat
 
     def to_tokens(self):
-        return ['Beat' + str(self.beat)]
+        return ['Beat_' + str(self.beat)]
 
     def update_metric_attributes_with_config(self, new_config : MusicConfig, old_config : MusicConfig):
         beat = int(np.round(self.beat * new_config.n_bar_steps / old_config.n_bar_steps))
@@ -62,8 +62,8 @@ class TempoEvent(MusicEvent):
     def to_tokens(self, include_metrics=False):
         res = []
         if include_metrics:
-            res += [super().to_token()] 
-        res += ['Tempo' + str(self.tempo)]
+            res += super().to_tokens()
+        res += ['Tempo_' + str(self.tempo)]
         return res
 
 
@@ -97,8 +97,8 @@ class ChordEvent(MusicEvent):
     def to_tokens(self, include_metrics=False):
         res = []
         if include_metrics:
-            res += [super(ChordEvent, self).to_token()]
-        res += ['Chord' + str(self.chord)]
+            res += super(ChordEvent, self).to_tokens()
+        res += ['Chord_' + str(self.chord)]
         return res
         
 
@@ -173,11 +173,11 @@ class NoteEvent(MusicEvent):
     def to_tokens(self, include_metrics=False):
         res = []
         if include_metrics:
-            res += [super().to_token()]
+            res += super().to_token()
         res += [
-            'NotePitch' + str(self.pitch), 
-            'NoteDuration' + str(self.duration),
-            'NoteVelocity' + str(self.velocity)
+            'NotePitch_' + str(self.pitch), 
+            'NoteDuration_' + str(self.duration),
+            'NoteVelocity_' + str(self.velocity)
         ]
         return res
 

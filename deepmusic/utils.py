@@ -28,13 +28,12 @@ def sort_and_remove_identical_events(events : List[MusicEvent]):
 
 def remove_duplicate_beats_from_tokens(tokens : List):
     res = []
-    prev_beat = 0
+    prev_beat = ''
     for tok in tokens:
         if tok.startswith('Beat'):
-            beat = int(tok[4:])
-            if beat != prev_beat:
+            if tok != prev_beat:
                 res += [tok]
-                prev_beat = beat
+                prev_beat = tok
         else:
             res += [tok]
     return res

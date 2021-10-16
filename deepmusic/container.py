@@ -108,12 +108,11 @@ class Music:
                 tempos += [TempoEvent.from_tokens([prev_pos_tok, tok], bar=nb)]
             elif tok.startswith('Chord'):
                 chords += [ChordEvent.from_tokens([prev_pos_tok, tok], bar=nb)]
-            elif tok.startswith('NotePitch'):
-                assert tokens[idx+3].startswith('NoteInstrument')
-                program = int(tokens[idx+3][15:])
+            elif tok.startswith('NoteInstrument'):
+                program = int(tok[15:])
                 if program not in tracks:
                     tracks[program] = []
-                tracks[program] += [NoteEvent.from_tokens([prev_pos_tok] + tokens[idx:idx+3], bar=nb)] 
+                tracks[program] += [NoteEvent.from_tokens([prev_pos_tok] + tokens[idx+1:idx+4], bar=nb)] 
         tracks = [Track(k, v, config) for k,v in tracks.items()]
         return Music(tracks, tempos, chords, config)
 
@@ -429,7 +428,7 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, add_tempo_chord=True, return_indices=False, add_eos=False):
+    def to_tokens(self, add_tempo_chord=True, return_indices=False, add_bos=False, add_eos=False):
         res = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
@@ -439,19 +438,23 @@ class Music:
             for beat in range(self.config.n_bar_steps):
                 if add_tempo_chord:
                     if (bar_idx,beat) in tempos:
-                        res += ['Beat'+str(beat), 'Tempo'+str(tempos[(bar_idx, beat)][-1].tempo)]
+                        res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
                     if (bar_idx,beat) in chords:
-                        res += ['Beat'+str(beat), 'Chord'+str(chords[(bar_idx, beat)][-1].chord)]
+                        res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
-                        res += track[bar_idx][beat].to_tokens(add_instrument_token=True)
+                        toks = track[bar_idx][beat].to_tokens(add_instrument_token=True)
+                        toks = list(filter(lambda x: not x.startswith('Bar'), toks)) ## remove bar tokens
+                        res += toks
         res = utils.remove_duplicate_beats_from_tokens(res)
+        if add_bos:
+            res = [self.config.special_tokens[0]] + res
         if add_eos:
             res += [self.config.special_tokens[1]]
         return self.config.encode(res) if return_indices else res
 
     def to_tuples(self, add_tempo_chord=True):
-        res = []
+        res = np.zeros(shape=(1,8))
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
@@ -459,23 +462,19 @@ class Music:
             for beat in range(self.config.n_bar_steps):
                 has_tempo_or_chord = False
                 if add_tempo_chord:
-                    res += [[bar_idx, beat] + [0]*6]
+                    metric_tuple = np.array([bar_idx, beat] + [0]*6) ## last column corresponds to instrumnt. if 0 means there is no notes and only tempo or chord on this timestep
                     if (bar_idx, beat) in tempos:
-                        has_tempo_or_chord = True
-                        res[-1][2] = tempos[(bar_idx, beat)].tempo + 1 ## in tuples 0 = ignore
+                        metric_tuple[2] = tempos[(bar_idx, beat)][-1].tempo + 1 ## in tuples 0 = ignore
                     if (bar_idx, beat) in chords:
-                        has_tempo_or_chord = True
-                        res[-1][3] = chords[(bar_idx, beat)].chord + 1
-                    if not has_tempo_or_chord:
-                        res = res[:-1] ## remove last tuple if there was no tempos or chords
-                has_notes = False
+                        metric_tuple[3] = chords[(bar_idx, beat)][-1].chord + 1 ## in tuples 0 = ignore
+                    if sum(metric_tuple[2:]): ## append it only if its not empty
+                        res = np.concatenate([res, metric_tuple[None, :]], axis=0)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
-                        has_notes = True
-                        res += [track[bar_idx][beat].to_tuples(add_instrument_token=True)]
-                if not has_notes and not has_tempo_or_chord:
-                    res += [[bar_idx, beat] + [0]*6]
-        return np.array(res)
+                        tuples = track[bar_idx][beat].to_tuples(add_instrument_token=True)
+                        tuples = np.concatenate([tuples[:, :2], np.zeros(shape=(tuples.shape[0], 2)), tuples[:, 2:]], axis=1) ## third and fourth columns correcspond to tempo and chord
+                        res = np.concatenate([res, tuples], axis=0)
+        return res[1:]
 
     def to_pianoroll(self, binarize=False):
         return dict(
@@ -780,14 +779,14 @@ class Track:
     def to_tokens(self, add_instrument_token=True):
         res = []
         bars = self.organize()
-        for bar in bars:
+        for bar_idx in bars:
             res += ['Bar']
-            for pos in bar:
-                res += ['Beat' + str(pos)]
-                for note in bar[pos].notes:
-                    res += note.to_tokens(include_metrics=False)
+            for beat_idx in bars[bar_idx]:
+                res += ['Beat_' + str(beat_idx)]
+                for note in bars[bar_idx][beat_idx].notes:
                     if add_instrument_token:
                         res += ['NoteInstrument_'+str(self.program)]
+                    res += note.to_tokens(include_metrics=False)
         return res
 
     def to_tuples(self, add_instrument_token=True):

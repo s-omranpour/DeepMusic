@@ -56,7 +56,7 @@ class MusicConfig:
         self.tempo_bins = np.linspace(min_tempo, max_tempo, num_tempo_bins, dtype=int)
 
         ## duration
-        self.duration_bins = np.arange(0, 4*unit)
+        self.duration_bins = np.arange(1, 4*unit+1)
 
         ## velocity
         self.num_velocity_bins = num_velocity_bins
@@ -65,11 +65,11 @@ class MusicConfig:
         ## tokens
         self.special_tokens = ['BOS', 'EOS', 'MASK']
         self.position_tokens = ['Bar'] + ['Beat_'+str(p) for p in self.position_bins]
-        self.tempo_tokens = ['Tempo_'+str(t) for t in self.tempo_bins]
-        self.chord_tokens = ['Chord_'+str(c) for c in CHORDS]
+        self.tempo_tokens = ['Tempo_'+str(i) for i in range(num_tempo_bins)]
+        self.chord_tokens = ['Chord_'+str(i) for i in range(len(CHORDS))]
         self.pitch_tokens = ['NotePitch_'+str(i) for i in PITCHES]
-        self.duration_tokens = ['NoteDuration_'+str(d) for d in self.duration_bins]
-        self.velocity_tokens = ['NoteVelocity_'+str(v)for v in self.velocity_bins]
+        self.duration_tokens = ['NoteDuration_'+str(i) for i in self.duration_bins]
+        self.velocity_tokens = ['NoteVelocity_'+str(i)for i in range(num_velocity_bins)]
         self.program_tokens = ['NoteInstrument_'+str(inst) for inst in INSTRUMENT_PROGRAMS]
         self.all_tokens =  self.special_tokens + self.position_tokens + self.tempo_tokens +\
             self.chord_tokens + self.pitch_tokens + self.duration_tokens + self.velocity_tokens + self.program_tokens
