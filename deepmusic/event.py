@@ -108,7 +108,7 @@ class NoteEvent(MusicEvent):
         bar : 0~...
         beat: 0~len(beats)-1  (0 = stating of a bar) 
         pitch : 0~128 (0 to 127 show midi pitch )
-        duration : 0~len(beats)-1 (0,... show duration in number of subbeats - 1)
+        duration : 1~len(beats) ( show duration in number of subbeats - 1)
         velocity : 0~len(velocity_bins)-1 (0,... show index of the value in velocity bins)
     """
 
@@ -131,7 +131,7 @@ class NoteEvent(MusicEvent):
     @staticmethod
     def from_tokens(tokens : List, bar : int):
         assert tokens[0].startswith('Beat')
-        beat = int(tokens[0][4:])
+        beat = int(tokens[0][5:])
         values = []
         for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_', 'NoteVelocity_']):
             assert tokens[idx+1].startswith(prefix)
@@ -147,14 +147,7 @@ class NoteEvent(MusicEvent):
             self.velocity = velocity
 
     def __repr__(self):
-        prop = [f'bar={self.bar}, beat={self.beat}']
-        if self.pitch:
-            prop += [f'pitch={self.pitch}']
-        if self.duration:
-            prop += [f'duration={self.duration}']
-        if self.velocity:
-            prop += [f'velocity={self.velocity}'] 
-        return f"NoteEvent({', '.join(prop)})"
+        return f"NoteEvent(bar={self.bar}, beat={self.beat}, pitch={self.pitch}, duration={self.duration}, velocity={self.velocity})"
 
     def __eq__(self, other):
         if isinstance(other, MusicEvent):

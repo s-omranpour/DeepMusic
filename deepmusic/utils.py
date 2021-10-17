@@ -18,7 +18,7 @@ def validate_chord(config : MusicConfig, chord : ChordEvent):
     return (0 <= chord.bar) and (0 <= chord.beat < config.n_bar_steps) and (0 <= chord.chord < len(CHORDS)) and (chord.chord_name in CHORDS)
 
 def validate_note(config : MusicConfig, note : NoteEvent):
-    return (0 <= note.pitch < 128) and (0 < note.duration <= config.n_bar_steps) and (0 < note.velocity <= config.num_velocity_bins)
+    return (0 <= note.pitch < 128) and (0 < note.duration <= config.n_bar_steps) and (0 <= note.velocity < config.num_velocity_bins)
 
 def sort_events(events : List[MusicEvent]):
     return sorted(events, key=lambda x: (x.bar, x.beat))

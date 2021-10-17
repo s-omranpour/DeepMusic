@@ -80,7 +80,7 @@ class Music:
     def from_pianoroll(rolls : Dict[int, np.array], config : MusicConfig):
         if config is None:
             config = MusicConfig()
-        tracks = [Track.from_pianoroll(v, k, config) for k,v in rolls.items()]
+        tracks = [Track.from_pianoroll(v, k[0], config, k[1]) for k,v in rolls.items()]
         return Music(tracks, config=config)
 
     @staticmethod
@@ -118,8 +118,8 @@ class Music:
 
     @staticmethod
     def from_tuples(tuples : Union[List[List], np.array], config : MusicConfig = None):
-        tuples = np.array(tuples)
-        assert len(tuples.shape) == 2 and tuples.shape[1] == 7, "Invalid tuples shape."
+        tuples = np.array(tuples).astype(int)
+        assert len(tuples.shape) == 2 and tuples.shape[1] == 8, "Invalid tuples shape."
         if config is None:
             config = MusicConfig()
         
@@ -127,8 +127,9 @@ class Music:
         programs = set(tuples[tuples[:, -1] > 0][:, -1]) ## program = 0 means not a note
         for program in programs:
             track = tuples[tuples[:, -1] == program][:, :-1]
+            track = np.concatenate([track[:, :2], track[:, 4:]], axis=1) ## remove tempo and chord column
             notes = [NoteEvent.from_tuple(t) for t in track]
-            tracks += [Track(program, notes, config)]
+            tracks += [Track(program-1, notes, config)]
 
         tempos = []
         for time in np.where(tuples[:,2] > 0)[0]:
@@ -420,7 +421,7 @@ class Music:
             n_bars += [self.tempos[-1].bar + 1]
         if len(self.chords):
             n_bars += [self.chords[-1].bar + 1]
-        return max(n_bars)
+        return max(n_bars) if len(n_bars) else 0
 
     def get_num_notes(self):
         return sum([len(t) for t in self.tracks])
@@ -455,19 +456,21 @@ class Music:
 
     def to_tuples(self, add_tempo_chord=True):
         res = np.zeros(shape=(1,8))
-        tracks = [t.organize() for t in self.tracks]
+        ## merge tracks with same program
+        tracks = []
+        for program in self.get_instruments():
+            tracks += [Track.merge_tracks([t for t in self.get_tracks() if t.program == program]).organize()]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
             for beat in range(self.config.n_bar_steps):
-                has_tempo_or_chord = False
                 if add_tempo_chord:
                     metric_tuple = np.array([bar_idx, beat] + [0]*6) ## last column corresponds to instrumnt. if 0 means there is no notes and only tempo or chord on this timestep
                     if (bar_idx, beat) in tempos:
                         metric_tuple[2] = tempos[(bar_idx, beat)][-1].tempo + 1 ## in tuples 0 = ignore
                     if (bar_idx, beat) in chords:
                         metric_tuple[3] = chords[(bar_idx, beat)][-1].chord + 1 ## in tuples 0 = ignore
-                    if sum(metric_tuple[2:]): ## append it only if its not empty
+                    if sum(metric_tuple[2:4]): ## append it only if its not empty
                         res = np.concatenate([res, metric_tuple[None, :]], axis=0)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
@@ -527,7 +530,7 @@ class Music:
             str_chords = '\n    ' + str(self.chords[0])
             if len(self.chords) > 1:
                 str_chords += '\n    ...\n  '
-        return f"Music(\n  name={self.name}, \n  bars={self.get_bar_count()},\n  tracks=[{str_tracks}],\n  tempos=[{str_tempos}],\n  chords=[{str_chords}]\n)"
+        return f'Music(\n  name="{self.name}", \n  bars={self.get_bar_count()},\n  tracks=[{str_tracks}],\n  tempos=[{str_tempos}],\n  chords=[{str_chords}]\n)'
 
     def __hash__(self):
         return hash((self.config, *self.tempos, *self.chords, *self.tracks))
@@ -577,25 +580,30 @@ class Track:
     @staticmethod
     def from_pianoroll(roll : np.array, program : int, config : MusicConfig = None, name : str = ''):
         config = config if config is not None else MusicConfig()
-        padded = np.pad(roll[:128], ((0, 0), (1, 1)))
-        diff = np.diff(padded.astype(np.int8), axis=1)
+        padded = np.pad(roll, ((0, 0), (1, 1))).astype(int)
+        diff = padded[:, :-1] - padded[:, 1:]
         pitches, note_ons = np.where(diff < 0)
-        note_offs = np.where(diff > 0)[1]
+        note_offs = np.where(diff > 0)[1] - 1
 
         poses = {}
         for pitch, on, off in zip(pitches, note_ons, note_offs):
             if on not in poses:
                 poses[on] = []
-            poses[on] += [
-                NoteEvent(
-                    bar=on // config.n_bar_steps, 
-                    beat=on % config.n_bar_steps, 
-                    pitch=pitch, 
-                    duration=off - on, 
-                    velocity=int(roll[pitch, on])
-                )
-            ]
-        return Track(program, utils.flatten([poses[t] for t in sorted(poses)], config, name))
+            total_duration = off - on + 1
+            while total_duration > 0:
+                duration = min(total_duration, config.n_bar_steps)
+                total_duration -= duration
+                poses[on] += [
+                    NoteEvent(
+                        bar=on // config.n_bar_steps, 
+                        beat=on % config.n_bar_steps, 
+                        pitch=pitch, 
+                        duration=duration, 
+                        velocity=list(config.velocity_bins).index(int(roll[pitch, on]))
+                    )
+                ]
+        notes = utils.flatten([poses[t] for t in sorted(poses)])
+        return Track(program, notes, config, name)
 
     @staticmethod
     def merge_tracks(tracks : List, name : str = None):
@@ -629,8 +637,8 @@ class Track:
             for note in notes:
                 if utils.validate_note(self.config, note):
                     self.notes += [note]
-                # else:
-                #     logging.warn('Invalid note filtered: ' + str(note))
+                else:
+                    logging.warn('Invalid note filtered: ' + str(note))
         # else:
             # logging.warn('Empty list of notes entered.')
 
@@ -800,7 +808,7 @@ class Track:
         return res
 
     def __repr__(self):
-        return f'Track(inst_family={self.inst_family}, program={self.program}, name={self.name}, notes={len(self.notes)}, bars={self.get_bar_count()})'
+        return f'Track(inst_family={self.inst_family}, program={self.program}, name="{self.name}", notes={len(self.notes)}, bars={self.get_bar_count()})'
     
     def __len__(self):
         return len(self.notes)
