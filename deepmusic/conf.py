@@ -95,7 +95,7 @@ class MusicConfig:
     def __eq__(self, o: object):
         if isinstance(o, MusicConfig):
             return self.unit == o.unit and\
-                self.time_signature == o.self.time_signature and\
+                self.time_signature == o.time_signature and\
                     self.tick_resol == o.tick_resol and \
                         self.min_tempo == o.min_tempo and \
                             self.max_tempo == o.max_tempo and \
