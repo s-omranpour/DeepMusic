@@ -2,6 +2,7 @@ from typing import List, Tuple
 import numpy as np
 import itertools
 
+TIME_SIGNATURES = [(n,d) for d in [2,4,8] for n in range(1,d+1)]
 PITCHES = np.arange(0, 128)
 PITCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 CHORD_QUALITIES = ['M', 'm', 'o', '+', '7', 'M7', 'm7', 'o7', '/o7', 'sus2', 'sus4']
@@ -68,7 +69,7 @@ class MusicConfig:
 
         ## tokens
         self.special_tokens = ['BOS', 'EOS', 'MASK']
-        self.time_tokens = ['TimeSignature_'+str(n)+str(d) for d in [2,4,8] for n in range(1,d+1)]
+        self.time_tokens = ['TimeSignature_'+str(n)+str(d) for n,d in TIME_SIGNATURES]
         self.position_tokens = ['Bar'] + ['Beat_'+str(p) for p in self.position_bins]
         self.tempo_tokens = ['Tempo_'+str(i) for i in range(num_tempo_bins)]
         self.chord_tokens = ['Chord_'+str(i) for i in range(len(CHORDS))]
