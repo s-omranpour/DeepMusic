@@ -54,11 +54,11 @@ class Music:
         midi = MidiFile(file_path)
         midi = deepcopy(midi)
         tick_resol = midi.ticks_per_beat
-        
+        time_sig = (midi.time_signature_changes.numerator, midi.time_signature_changes.denominator)
         if config is None:
-            config = MusicConfig(unit, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
+            config = MusicConfig(unit, time_sig, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
         else:
-            config.update_resolution(tick_resol)
+            config.update_resolution_and_time(tick_resol, time_sig)
 
         tracks = [Track.create_track_from_midi_instrument(config, inst) for inst in midi.instruments]
         tempos = []
@@ -93,7 +93,6 @@ class Music:
     def from_tokens(tokens : List, config : MusicConfig = None):
         if config is None:
             config = MusicConfig()
-
         tracks = {}
         tempos = []
         chords = []
@@ -505,7 +504,7 @@ class Music:
         midi.tempo_changes = sorted(tempo_changes, key=lambda x: x.time)
         midi.markers = sorted(chords, key=lambda x: x.time)
         midi.key_signature_changes = []
-        midi.time_signature_changes = [ct.TimeSignature(4, 4, 0)]
+        midi.time_signature_changes = [ct.TimeSignature(self.config.time_signature[0], self.config.time_signature[1], 0)]
         if output_path:
             midi.dump(output_path)
         return midi

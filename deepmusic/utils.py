@@ -83,6 +83,7 @@ def quantize_midi(
     num_tempo_bins : int = 30, 
     num_velocity_bins : int = 30):
 
+    assert len(midi.time_signature_changes) == 1
     midi = deepcopy(midi)
     ## load notes
     instr_notes = []
@@ -94,7 +95,8 @@ def quantize_midi(
     
     offset = min([notes[0].start for notes in instr_notes])
     tick_resol = midi.ticks_per_beat
-    config = config if config is not None else MusicConfig(unit, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
+    time_sig = (midi.time_signature_changes.numerator, midi.time_signature_changes.denominator)
+    config = config if config is not None else MusicConfig(unit, time_sig, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
 
     for i,notes in enumerate(instr_notes):
         for note in notes:
@@ -140,11 +142,8 @@ def process_midi(
 
     try:
         midi = mid_parser.MidiFile(file_path)
-        times = midi.time_signature_changes
-        if len(times):
-            t = times[0]
-            if t.numerator != 4 or t.denominator != 4:
-                return
+        if len(midi.time_signature_changes) > 1:
+            return
         midi = analyze_midi(midi)
         midi = quantize_midi(midi, config, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
         midi.dump(save_path + file_path.split('/')[-1])
