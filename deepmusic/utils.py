@@ -83,7 +83,6 @@ def quantize_midi(
     num_tempo_bins : int = 30, 
     num_velocity_bins : int = 30):
 
-    assert len(midi.time_signature_changes) == 1
     midi = deepcopy(midi)
     ## load notes
     instr_notes = []
