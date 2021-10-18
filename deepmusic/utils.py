@@ -5,7 +5,7 @@ from copy import deepcopy
 from chorder import Dechorder
 
 from miditoolkit.midi import parser as mid_parser
-from miditoolkit.midi.containers import Marker, Note
+from miditoolkit.midi.containers import Marker, TimeSignature
 
 from .event import MusicEvent, NoteEvent, TempoEvent, ChordEvent
 from .conf import CHORDS, PITCH_CLASSES, MusicConfig
@@ -141,10 +141,12 @@ def process_midi(
 
     try:
         midi = mid_parser.MidiFile(file_path)
-        if len(midi.time_signature_changes) > 1:
+        time_sigs = list(set([(t.numerator, t.denominator) for t in midi.time_signature_changes]))
+        if len(time_sigs) > 1:
             return
         midi = analyze_midi(midi)
         midi = quantize_midi(midi, config, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
+        midi.time_signature_changes = [TimeSignature(time_sigs[0][0], time_sigs[0][1], 0)]
         midi.dump(save_path + file_path.split('/')[-1])
     except Exception as e:
         print(file_path, 'caused error', e)
