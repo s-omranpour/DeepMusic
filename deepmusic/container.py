@@ -435,7 +435,7 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, add_tempo_chord=True, add_instrument_token=True, return_indices=False, add_bos=False, add_eos=False):
+    def to_tokens(self, add_tempo=True, add_chord=True, add_instrument_token=True, return_indices=False, add_bos=False, add_eos=False):
         res = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
@@ -443,9 +443,10 @@ class Music:
         for bar_idx in range(self.get_bar_count()):
             res += ['Bar']
             for beat in range(self.config.n_bar_steps):
-                if add_tempo_chord:
+                if add_tempo:
                     if (bar_idx,beat) in tempos:
                         res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
+                if add_chord:
                     if (bar_idx,beat) in chords:
                         res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
                 for track in tracks:
@@ -460,7 +461,7 @@ class Music:
             res += [self.config.special_tokens[1]]
         return self.config.encode(res) if return_indices else res
 
-    def to_tuples(self, add_tempo_chord=True):
+    def to_tuples(self, add_tempo=True, add_chord=True):
         res = np.zeros(shape=(1,8))
         ## merge tracks with same program
         tracks = []
@@ -470,14 +471,15 @@ class Music:
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
             for beat in range(self.config.n_bar_steps):
-                if add_tempo_chord:
-                    metric_tuple = np.array([bar_idx, beat] + [0]*6) ## last column corresponds to instrumnt. if 0 means there is no notes and only tempo or chord on this timestep
+                metric_tuple = np.array([bar_idx, beat] + [0]*6) ## last column corresponds to instrumnt. if 0 means there is no notes and only tempo or chord on this timestep
+                if add_tempo:
                     if (bar_idx, beat) in tempos:
                         metric_tuple[2] = tempos[(bar_idx, beat)][-1].tempo + 1 ## in tuples 0 = ignore
+                if add_chord:
                     if (bar_idx, beat) in chords:
                         metric_tuple[3] = chords[(bar_idx, beat)][-1].chord + 1 ## in tuples 0 = ignore
-                    if sum(metric_tuple[2:4]): ## append it only if its not empty
-                        res = np.concatenate([res, metric_tuple[None, :]], axis=0)
+                if sum(metric_tuple[2:4]): ## append it only if its not empty
+                    res = np.concatenate([res, metric_tuple[None, :]], axis=0)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
                         tuples = track[bar_idx][beat].to_tuples(add_instrument_token=True)
