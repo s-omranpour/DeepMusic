@@ -54,9 +54,13 @@ class Music:
         midi = MidiFile(file_path)
         midi = deepcopy(midi)
         tick_resol = midi.ticks_per_beat
-        if len(midi.time_signature_changes) > 1:
-            logging.warn('File has more than one time signature changes. Only the first one will be used.')
-        time_sig = (midi.time_signature_changes[0].numerator, midi.time_signature_changes[0].denominator)
+        
+        if len(midi.time_signature_changes) == 0:
+            time_sig = (4,4)
+        else:
+            if len(midi.time_signature_changes) > 1:
+                logging.warn('File has more than one time signature changes. Only the first one will be used.')
+            time_sig = (midi.time_signature_changes[0].numerator, midi.time_signature_changes[0].denominator)
         
         if config is None:
             config = MusicConfig(unit, time_sig, tick_resol, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
