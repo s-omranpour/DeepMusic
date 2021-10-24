@@ -435,7 +435,7 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, add_tempo_chord=True, return_indices=False, add_bos=False, add_eos=False):
+    def to_tokens(self, add_tempo_chord=True, add_instrument_token=True, return_indices=False, add_bos=False, add_eos=False):
         res = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
@@ -450,7 +450,7 @@ class Music:
                         res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
-                        toks = track[bar_idx][beat].to_tokens(add_instrument_token=True)
+                        toks = track[bar_idx][beat].to_tokens(add_instrument_token=add_instrument_token)
                         toks = list(filter(lambda x: not x.startswith('Bar'), toks)) ## remove bar tokens
                         res += toks
         res = utils.remove_duplicate_beats_from_tokens(res)
