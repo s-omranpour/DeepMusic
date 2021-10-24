@@ -144,6 +144,7 @@ def process_midi(
         return
     midi = analyze_midi(midi)
     midi = quantize_midi(midi, config, unit, min_tempo, max_tempo, num_tempo_bins, num_velocity_bins)
-    midi.time_signature_changes = [TimeSignature(time_sigs[0][0], time_sigs[0][1], 0)]
+    if len(time_sigs):
+        midi.time_signature_changes = [TimeSignature(time_sigs[0][0], time_sigs[0][1], 0)]
     midi.dump(save_path + file_path.split('/')[-1])
     
