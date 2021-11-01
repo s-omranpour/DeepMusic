@@ -180,7 +180,7 @@ class Music:
             else:
                 merge tracks with same program and name
         """
-        assert len(musics) > 0, "Not enough musics to concatenate."
+        assert len(musics) > 0, "No musics to concatenate."
         configs = list(set([m.config for m in musics]))
         assert len(configs) == 1, "Inconsistancy among inserted musics' configs."
         config = configs[0]
@@ -191,7 +191,7 @@ class Music:
         for music in musics:
             m = deepcopy(music)
             m.pad_left(n_prev_bars)
-            n_prev_bars = m.get_bar_count()
+            n_prev_bars = max(m.get_bar_count(), 1) ## we treat an empty music as an empty bar
             all_tracks += m.get_tracks()
             tempos += m.get_tempos()
             chords += m.get_chords()
@@ -206,6 +206,7 @@ class Music:
                 indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == id[0] and res.tracks[idx].name == id[1]]
                 res.merge_tracks(indices, name=id[1])
         return res
+
 
     def change_config(self, config : MusicConfig):
         for t in self.tracks:
