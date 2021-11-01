@@ -133,9 +133,13 @@ class NoteEvent(MusicEvent):
         assert tokens[0].startswith('Beat')
         beat = int(tokens[0][5:])
         values = []
-        for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_', 'NoteVelocity_']):
+        for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_']):
             assert tokens[idx+1].startswith(prefix)
             values += [int(tokens[idx+1][len(prefix):])]
+        if tokens[3].startswith('NoteVelocity_'):
+            values += [int(tokens[3][13:])]
+        else:
+            values += [None]       ## in melodies that have no velocity token, we use a default value of None
         return NoteEvent(bar, beat, *values)
 
     def set_attributes(self, pitch : int = None, duration : int = None, velocity : int = None):
@@ -163,20 +167,20 @@ class NoteEvent(MusicEvent):
     def to_tuple(self):
         return [self.bar, self.beat, self.pitch, self.duration, self.velocity]
 
-    def to_tokens(self, include_metrics=False):
+    def to_tokens(self, include_metrics=False, include_velocity=True):
         res = []
         if include_metrics:
             res += super().to_token()
         res += [
             'NotePitch_' + str(self.pitch), 
-            'NoteDuration_' + str(self.duration),
-            'NoteVelocity_' + str(self.velocity)
+            'NoteDuration_' + str(self.duration)
         ]
+        if include_velocity and self.velocity is not None:
+            res += ['NoteVelocity_' + str(self.velocity)]
         return res
 
     def update_note_with_config(self, new_config : MusicConfig, old_config : MusicConfig):
         self.update_metric_attributes_with_config(new_config, old_config)
-        duration = int(np.round(self.duration * new_config.n_bar_steps / old_config.n_bar_steps))
-        velocity = np.argmin(np.abs(new_config.velocity_bins - old_config.velocity_bins[self.velocity]))
-        self.duration = duration
-        self.velocity = velocity
+        self.duration = int(np.round(self.duration * new_config.n_bar_steps / old_config.n_bar_steps))
+        if self.velocity is not None:
+            self.velocity = np.argmin(np.abs(new_config.velocity_bins - old_config.velocity_bins[self.velocity]))
