@@ -8,7 +8,6 @@ from copy import deepcopy
 from miditoolkit.midi.parser import MidiFile
 from miditoolkit.midi import containers as ct
 from midi2audio import FluidSynth
-from deepmusic import conf
 
 from deepmusic.conf import INSTRUMENT_FAMILIES, CHORDS, MusicConfig
 from deepmusic.event import NoteEvent, TempoEvent, ChordEvent
@@ -199,7 +198,6 @@ class Music:
             tempos += m.get_tempos()
             chords += m.get_chords()
             
-            
         tempos = utils.sort_and_remove_identical_events(tempos)
         chords = utils.sort_and_remove_identical_events(chords)
         res = Music(all_tracks, tempos, chords, config, name='Concatented : '+', '.join([m.name for m in musics]))
@@ -209,7 +207,6 @@ class Music:
                 indices = [idx for idx in range(len(res.tracks)) if res.tracks[idx].program == id[0] and res.tracks[idx].name == id[1]]
                 res.merge_tracks(indices, name=id[1])
         return res
-
 
     def change_config(self, config : MusicConfig):
         for t in self.tracks:
@@ -259,7 +256,7 @@ class Music:
 
     def pad_left(self, n : int):
         for track in self.tracks:
-            track.pad_left(n)
+            track.pad_left(n, inplace=True)
         for tempo in self.tempos:
             tempo.set_metric_attributes(bar=tempo.bar + n)
         for chord in self.chords:
@@ -450,10 +447,10 @@ class Music:
                 res += ['Beat_'+str(beat)]
                 if add_tempo:
                     if (bar_idx,beat) in tempos:
-                        res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
+                        res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
                 if add_chord:
                     if (bar_idx,beat) in chords:
-                        res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=True)
+                        res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
                 for track in tracks:
                     if bar_idx in track and beat in track[bar_idx]:
                         toks = track[bar_idx][beat].to_tokens(add_instrument_token=add_instrument_token, add_velocity_token=add_velocity_token)
@@ -680,6 +677,14 @@ class Track:
             self.config = config
             return
         logging.warn('Config unchanged.')
+
+    def set_null_velocity(self, velocity : int):
+        if 0 <= velocity < self.config.num_velocity_bins:
+            for n in self.notes:
+                if n.velocity is None:
+                    n.set_attributes(velocity=velocity)
+                    
+
 
     def pad_left(self, n : int = 0, inplace : bool = False):
         notes = self.get_notes()
