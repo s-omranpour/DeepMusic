@@ -436,36 +436,45 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, add_tempo=True, add_chord=True, add_instrument_token=True, add_velocity_token=True, return_indices=False, add_bos=False, add_eos=False):
+    def to_tokens(self, add_tempo=True, add_chord=True, add_instrument_token=True, add_velocity_token=True, return_indices=False, add_bos=False, add_eos=False, target_track_index=0):
         res = []
+        mask = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
             res += ['Bar']
+            mask += [0]
             for beat in range(self.config.n_bar_steps):
                 res += ['Beat_'+str(beat)]
+                mask += [0]
                 if add_tempo:
                     if (bar_idx,beat) in tempos:
                         res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
+                        mask += [0]
                 if add_chord:
                     if (bar_idx,beat) in chords:
                         res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
-                for track in tracks:
+                        mask += [0]
+                for track_idx, track in enumerate(tracks):
                     if bar_idx in track and beat in track[bar_idx]:
                         toks = track[bar_idx][beat].to_tokens(add_instrument_token=add_instrument_token, add_velocity_token=add_velocity_token)
                         if toks[0] == 'Bar':
                             toks = toks[1:] ## remove bar token
                         toks = toks[1:]     ## remove beat token
                         res += toks
+                        mask += [1 if track_idx == target_track_index else 0]*len(toks)
                 if res[-1] == 'Beat_'+str(beat):  ## remove empty beat token
                     res = res[:-1]
+                    mask = mask[:-1]
         # res = utils.remove_duplicate_beats_from_tokens(res)
         if add_bos:
             res = [self.config.special_tokens[0]] + res
+            mask = [0] + mask
         if add_eos:
             res += [self.config.special_tokens[1]]
-        return self.config.encode(res) if return_indices else res
+            mask += [0]
+        return self.config.encode(res) if return_indices else res, mask
 
     def to_tuples(self, add_tempo=True, add_chord=True):
         res = np.zeros(shape=(1,8))
