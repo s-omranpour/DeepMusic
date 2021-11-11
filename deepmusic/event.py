@@ -1,6 +1,6 @@
 from typing import List
 import numpy as np
-from .conf import CHORDS, MusicConfig
+from .conf import CHORDS, PITCH_CLASSES, MusicConfig
 
 
 class MusicEvent:
@@ -92,7 +92,14 @@ class ChordEvent(MusicEvent):
 
     def set_chord(self, chord : int = 0):
         self.chord = chord
-        self.chord_name =  CHORDS[self.chord - 1]
+        self.chord_name =  CHORDS[self.chord]
+
+    def transpose(self, n : int = 0):
+        if n > 0:
+            pitch_class, quality = self.chord_name.split('_')
+            pitch_class_idx = (PITCH_CLASSES.index(pitch_class) + n) % 12
+            new_name = PITCH_CLASSES[pitch_class_idx] + '_' + quality
+            self.set_chord(CHORDS.index(new_name))
 
     def to_tokens(self, include_metrics=False):
         res = []

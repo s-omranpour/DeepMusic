@@ -191,9 +191,8 @@ class Music:
         chords = []
         n_prev_bars = 0
         for music in musics:
-            m = deepcopy(music)
-            m.pad_left(n_prev_bars)
-            n_prev_bars = max(m.get_bar_count(), 1) ## we treat an empty music as an empty bar
+            m = music.pad_left(n_prev_bars, inplace = False)
+            n_prev_bars = max(m.get_bar_count(), 1 + n_prev_bars) ## we treat an empty music as an empty bar
             all_tracks += m.get_tracks()
             tempos += m.get_tempos()
             chords += m.get_chords()
@@ -254,13 +253,39 @@ class Music:
         self.remove_tracks(indices=indices, inplace=True)
         self.tracks += [super_track]
 
-    def pad_left(self, n : int):
-        for track in self.tracks:
+    def pad_left(self, n : int, inplace : bool = False):
+        tracks = self.get_tracks()
+        for track in tracks:
             track.pad_left(n, inplace=True)
-        for tempo in self.tempos:
+        tempos = self.get_tempos()
+        for tempo in tempos:
             tempo.set_metric_attributes(bar=tempo.bar + n)
-        for chord in self.chords:
+        chords = self.get_chords()
+        for chord in chords:
             chord.set_metric_attributes(bar=chord.bar + n)
+        if inplace:
+            self.tracks = tracks
+            self.tempos = tempos
+            self.chords = chords
+            return
+        return Music(tracks, tempos, chords, self.get_config(), self.name)
+
+    def transpose(self, n : int = 0, inplace : bool = False):
+        tracks = self.get_tracks()
+        for t in tracks:
+            if n + t.get_max_pitch() < 128: ## validity of transposition
+                t.transpose(n, inplace=True)
+            else:
+                if not inplace:
+                    return Music(self.get_tracks(), self.get_tempos(), self.get_chords(), self.get_config(), self.name)
+        chords = self.get_chords()
+        for chord in chords:
+            chord.transpose(n)
+        if inplace:
+            self.tracks = tracks
+            self.chords = chords
+            return
+        return Music(tracks, self.get_tempos(), chords, self.get_config(), self.name)
 
     def remove_starting_silent_bars(self, inplace : bool = False):
         min_bars = [t.notes[0].bar for t in self.tracks]
@@ -436,26 +461,21 @@ class Music:
     def get_instruments(self, family=False):
         return list(set([t.inst_family if family else t.program for t in self.tracks]))
 
-    def to_tokens(self, add_tempo=True, add_chord=True, add_instrument_token=True, add_velocity_token=True, return_indices=False, add_bos=False, add_eos=False, target_track_index=0):
+    def to_tokens(self, add_tempo=True, add_chord=True, add_instrument_token=True, add_velocity_token=True, return_indices=False, add_bos=False, add_eos=False):
         res = []
-        mask = []
         tracks = [t.organize() for t in self.tracks]
         tempos = utils.organize_events_by_attr(self.tempos, ['bar', 'beat'])
         chords = utils.organize_events_by_attr(self.chords, ['bar', 'beat'])
         for bar_idx in range(self.get_bar_count()):
             res += ['Bar']
-            mask += [0]
             for beat in range(self.config.n_bar_steps):
                 res += ['Beat_'+str(beat)]
-                mask += [0]
                 if add_tempo:
                     if (bar_idx,beat) in tempos:
                         res += tempos[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
-                        mask += [0]
                 if add_chord:
                     if (bar_idx,beat) in chords:
                         res += chords[(bar_idx, beat)][-1].to_tokens(include_metrics=False)
-                        mask += [0]
                 for track_idx, track in enumerate(tracks):
                     if bar_idx in track and beat in track[bar_idx]:
                         toks = track[bar_idx][beat].to_tokens(add_instrument_token=add_instrument_token, add_velocity_token=add_velocity_token)
@@ -463,18 +483,14 @@ class Music:
                             toks = toks[1:] ## remove bar token
                         toks = toks[1:]     ## remove beat token
                         res += toks
-                        mask += [1 if track_idx == target_track_index else 0]*len(toks)
                 if res[-1] == 'Beat_'+str(beat):  ## remove empty beat token
                     res = res[:-1]
-                    mask = mask[:-1]
         # res = utils.remove_duplicate_beats_from_tokens(res)
         if add_bos:
             res = [self.config.special_tokens[0]] + res
-            mask = [0] + mask
         if add_eos:
             res += [self.config.special_tokens[1]]
-            mask += [0]
-        return self.config.encode(res) if return_indices else res, mask
+        return self.config.encode(res) if return_indices else res
 
     def to_tuples(self, add_tempo=True, add_chord=True):
         res = np.zeros(shape=(1,8))
@@ -705,6 +721,16 @@ class Track:
             return
         return Track(self.program, notes, self.get_config(), self.name)
 
+    def transpose(self, n : int = 0, inplace : bool = False):
+        notes = self.get_notes()
+        if n > 0 and n + self.get_max_pitch() < 128:
+            for note in notes:
+                note.set_attributes(pitch=note.pitch + n)
+        if inplace:
+            self.notes = notes
+            return
+        return Track(self.program, notes, self.get_config(), self.name)
+
     def find_position_index(self, bar : int, beat : int):
         for i, n in enumerate(self.notes):
             if n.bar >= bar and n.beat >= beat:
@@ -763,6 +789,9 @@ class Track:
             for j in res[i]:
                 res[i][j] = Track(self.program, res[i][j], self.config, self.name)
         return res
+
+    def get_max_pitch(self):
+        return max([n.pitch for n in self.notes])
 
     def get_bars(self):
         if len(self.notes) == 0:
