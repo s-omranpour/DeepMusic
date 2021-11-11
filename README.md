@@ -1,3 +1,6 @@
+*** A newer version of Deepmusic package with more features and better interface is available at the `multitrack` branch. However, it is still under development ***
+
+
 # DeepMusic
 DeepMusic is a high level python package with following features:
  - supporting different formats like MIDI, REMI, Compound Word and pianoroll. [1, 2]
