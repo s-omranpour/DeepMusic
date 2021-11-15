@@ -141,7 +141,9 @@ class NoteEvent(MusicEvent):
         beat = int(tokens[0][5:])
         values = []
         for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_']):
-            assert tokens[idx+1].startswith(prefix)
+            # assert tokens[idx+1].startswith(prefix)
+            if not tokens[idx+1].startswith(prefix):
+                return None
             values += [int(tokens[idx+1][len(prefix):])]
         if len(tokens) == 4 and tokens[3].startswith('NoteVelocity_'):
             values += [int(tokens[3][13:])]

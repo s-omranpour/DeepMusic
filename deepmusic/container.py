@@ -120,7 +120,9 @@ class Music:
                     program = 0
                 if program not in tracks:
                     tracks[program] = []
-                tracks[program] += [NoteEvent.from_tokens([prev_pos_tok] + tokens[idx:idx+3], bar=nb)] 
+                note = NoteEvent.from_tokens([prev_pos_tok] + tokens[idx:idx+3], bar=nb)
+                if note is not None:
+                    tracks[program] += [note] 
         tracks = [Track(k, v, config) for k,v in tracks.items()]
         return Music(tracks, tempos, chords, config)
 
