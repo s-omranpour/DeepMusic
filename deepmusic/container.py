@@ -102,7 +102,7 @@ class Music:
         tracks = {}
         tempos = []
         chords = []
-        prev_pos_tok = None
+        prev_pos_tok = 'Beat_0'
         nb = -1
         for idx,tok in enumerate(tokens):
             if tok.startswith('Bar'):
