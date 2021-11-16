@@ -22,24 +22,21 @@ pip install .
 
 ## Usage
 ```python
-from deepmusic import MusicRepr
+from deepmusic import Music
 
 ## reading a midi file
-seq = MusicRepr.from_file('test.mid')
-
-## displaying first 10 events
-print(seq[:10])
+piece = Music.from_file('test.mid')
 
 ## export to remi representation
-remi = seq.to_remi(ret='token')
+remi = piece.to_tokens()
 
-## export to compound word representation
-cp = seq.to_cp()
-print(cp.shape) ## (num_events, 8)
+## export to tuple representation
+cw = piece.to_tuples()
+print(cw.shape) ## (num_events, 8)
 
 ## splitting song's bars
 bars = seq.get_bars()
-print(len(bars))
+
 ```
 
 
