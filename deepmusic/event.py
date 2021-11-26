@@ -139,17 +139,17 @@ class NoteEvent(MusicEvent):
     def from_tokens(tokens : List, bar : int):
         assert tokens[0].startswith('Beat')
         beat = int(tokens[0][5:])
-        values = []
-        for idx, prefix in enumerate(['NotePitch_', 'NoteDuration_']):
-            # assert tokens[idx+1].startswith(prefix)
-            if not tokens[idx+1].startswith(prefix):
-                return None
-            values += [int(tokens[idx+1][len(prefix):])]
-        if len(tokens) == 4 and tokens[3].startswith('NoteVelocity_'):
-            values += [int(tokens[3][13:])]
-        else:
-            values += [None]       ## in melodies that have no velocity token, we use a default value of None
-        return NoteEvent(bar, beat, *values)
+        values = {}
+        for tok in tokens[1:]:
+            if tok.startswith('NotePitch_') and 'pitch' not in values:
+                values['pitch'] = int(tok[len('NotePitch_'):])
+            elif tok.startswith('NoteDuration_') and 'duration' not in values:
+                values['duration'] = int(tok[len('NoteDuration_'):])
+            elif tok.startswith('NoteVelocity_') and 'velocity' not in values:
+                values['velocity'] = int(tok[len('NoteVelocity_'):])
+        if 'duration' not in values:
+            values['duration'] = 1 ## set the duration to minimum if there was only a pitch token
+        return NoteEvent(bar, beat, **values)
 
     def set_attributes(self, pitch : int = None, duration : int = None, velocity : int = None):
         if pitch is not None:
