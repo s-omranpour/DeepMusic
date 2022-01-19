@@ -84,7 +84,7 @@ class MusicConfig:
         self.tick_resol = tick_resol
         self.step = tick_resol // self.unit
         self.bar_resol = int(time_signature[0] * tick_resol * 4 / time_signature[1])
-        self.n_bar_steps = int(time_signature[0] * unit * 4 / time_signature[1])
+        self.n_bar_steps = int(time_signature[0] * self.unit * 4 / time_signature[1])
         self.time_signature = time_signature
 
     def __repr__(self):
