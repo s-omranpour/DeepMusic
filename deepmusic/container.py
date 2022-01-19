@@ -841,10 +841,12 @@ class Track:
 
     def to_pianoroll(self, binarize=False):
         roll = np.zeros(shape=(128, self.get_bar_count()*self.config.n_bar_steps))
+        onsets = np.zeros(shape=(128, self.get_bar_count()*self.config.n_bar_steps))
         for note in self.notes:
             offset = note.bar*self.config.n_bar_steps + note.beat
+            onsets[note.pitch, offset] = 1
             roll[note.pitch, offset:offset+note.duration] = 1 if binarize else self.config.velocity_bins[note.velocity]
-        return roll
+        return roll, onsets
 
     def to_tokens(self, add_instrument_token=True, add_velocity_token=True):
         res = []
